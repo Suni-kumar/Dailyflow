@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- DayFlow Sun/Flow/Checkmark central glyph within 66dp safe zone (21 to 87) -->
+    <path
+        android:pathData="M54,26 A28,28 0 1,1 26,54 A28,28 0 0,1 54,26"
+        android:strokeWidth="5"
+        android:strokeColor="#38BDF8"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round" />
+    
+    <!-- Flowing inner arc -->
+    <path
+        android:pathData="M38,54 C38,42 46,38 54,38 C64,38 70,46 70,54 C70,64 62,68 54,68"
+        android:strokeWidth="5"
+        android:strokeColor="#F59E0B"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round" />
+
+    <!-- Sharp checkmark accent -->
+    <path
+        android:pathData="M44,54 L52,62 L66,46"
+        android:strokeWidth="5.5"
+        android:strokeColor="#FFFFFF"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Sparkle / Flow pulse -->
+    <path
+        android:pathData="M72,34 L75,37 M75,34 L72,37"
+        android:strokeWidth="3"
+        android:strokeColor="#FCD34D"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round" />
+</vector>

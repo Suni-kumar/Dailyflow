@@ -1,0 +1,6 @@
+{
+  "name": "DayFlow",
+  "description": "A native Android daily tracking app for tasks, habits, goals, calendar, statistics, and AI coaching.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
