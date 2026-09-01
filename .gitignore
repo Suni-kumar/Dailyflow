@@ -22,3 +22,6 @@ debug.keystore
 *.p12
 my-upload-key.jks
 
+# Ensure Gradle wrapper jar is included
+!gradle/wrapper/gradle-wrapper.jar
+
