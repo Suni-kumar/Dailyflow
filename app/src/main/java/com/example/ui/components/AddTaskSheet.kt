@@ -69,6 +69,9 @@ import com.example.ui.theme.DayFlowPrimary
 import com.example.ui.theme.DayFlowPrimaryContainer
 import com.example.ui.theme.DayFlowSurfaceContainerLowest
 
+import androidx.compose.material.icons.filled.DeleteOutline
+import com.example.model.TaskItem
+
 enum class StitchCategory(
   val label: String,
   val icon: ImageVector,
@@ -84,6 +87,7 @@ enum class StitchCategory(
 @Composable
 fun AddTaskSheet(
   isOpen: Boolean,
+  taskToEdit: TaskItem? = null,
   onDismiss: () -> Unit,
   onAddTask: (
     title: String,
@@ -92,17 +96,29 @@ fun AddTaskSheet(
     priority: TaskPriority,
     time: String,
     durationMinutes: Int
-  ) -> Unit
+  ) -> Unit,
+  onUpdateTask: ((TaskItem) -> Unit)? = null,
+  onDeleteTask: ((String) -> Unit)? = null
 ) {
   if (!isOpen) return
 
+  val isEditing = taskToEdit != null
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-  var title by remember { mutableStateOf("") }
-  var description by remember { mutableStateOf("") }
-  var selectedCategory by remember { mutableStateOf(StitchCategory.WORK) }
-  var startTime by remember { mutableStateOf("") }
-  var endTime by remember { mutableStateOf("") }
+  var title by remember(taskToEdit) { mutableStateOf(taskToEdit?.title ?: "") }
+  var description by remember(taskToEdit) { mutableStateOf(taskToEdit?.description ?: "") }
+  var selectedCategory by remember(taskToEdit) {
+    mutableStateOf(
+      when (taskToEdit?.category) {
+        ItemCategory.PERSONAL -> StitchCategory.PERSONAL
+        ItemCategory.HEALTH -> StitchCategory.HEALTH
+        ItemCategory.LEARNING, ItemCategory.FITNESS, ItemCategory.MINDFULNESS -> StitchCategory.NEW
+        else -> StitchCategory.WORK
+      }
+    )
+  }
+  var startTime by remember(taskToEdit) { mutableStateOf(taskToEdit?.time ?: "") }
+  var endTime by remember(taskToEdit) { mutableStateOf("") }
 
   ModalBottomSheet(
     onDismissRequest = onDismiss,
@@ -119,14 +135,14 @@ fun AddTaskSheet(
         .padding(horizontal = 24.dp, vertical = 20.dp)
         .navigationBarsPadding()
     ) {
-      // Header: New Task + Close Button
+      // Header: New Task / Edit Task + Close Button
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
         Text(
-          text = "New Task",
+          text = if (isEditing) "Edit Task" else "New Task",
           style = MaterialTheme.typography.headlineMedium.copy(
             fontSize = 24.sp,
             fontWeight = FontWeight.Normal
@@ -280,19 +296,30 @@ fun AddTaskSheet(
 
       Spacer(modifier = Modifier.height(36.dp))
 
-      // Bottom Action: Create Task Button
+      // Bottom Action: Create / Save Task Button
       Button(
         onClick = {
           if (title.isNotBlank()) {
-            val formattedTime = if (startTime.isNotBlank()) startTime else "9:00 AM"
-            onAddTask(
-              title.trim(),
-              description.trim(),
-              selectedCategory.mappedCategory,
-              TaskPriority.MEDIUM,
-              formattedTime,
-              30
-            )
+            val formattedTime = if (startTime.isNotBlank()) startTime else (taskToEdit?.time ?: "9:00 AM")
+            if (isEditing && taskToEdit != null && onUpdateTask != null) {
+              onUpdateTask(
+                taskToEdit.copy(
+                  title = title.trim(),
+                  description = description.trim(),
+                  category = selectedCategory.mappedCategory,
+                  time = formattedTime
+                )
+              )
+            } else {
+              onAddTask(
+                title.trim(),
+                description.trim(),
+                selectedCategory.mappedCategory,
+                TaskPriority.MEDIUM,
+                formattedTime,
+                30
+              )
+            }
             onDismiss()
           }
         },
@@ -320,11 +347,39 @@ fun AddTaskSheet(
           )
           Spacer(modifier = Modifier.width(8.dp))
           Text(
-            text = "Create Task",
+            text = if (isEditing) "Save Changes" else "Create Task",
             style = MaterialTheme.typography.titleMedium.copy(
               fontWeight = FontWeight.Medium,
               fontSize = 16.sp
             )
+          )
+        }
+      }
+
+      if (isEditing && taskToEdit != null && onDeleteTask != null) {
+        Spacer(modifier = Modifier.height(14.dp))
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+              onDeleteTask(taskToEdit.id)
+              onDismiss()
+            }
+            .padding(vertical = 8.dp),
+          horizontalArrangement = Arrangement.Center,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Icon(
+            imageVector = Icons.Default.DeleteOutline,
+            contentDescription = "Delete Task",
+            tint = DayFlowOnSurfaceVariant.copy(alpha = 0.6f),
+            modifier = Modifier.size(18.dp)
+          )
+          Spacer(modifier = Modifier.width(6.dp))
+          Text(
+            text = "Delete Task",
+            style = MaterialTheme.typography.bodyMedium,
+            color = DayFlowOnSurfaceVariant.copy(alpha = 0.7f)
           )
         }
       }

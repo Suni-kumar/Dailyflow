@@ -2,11 +2,11 @@
 <resources>
 
     <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar">
-        <item name="android:windowBackground">#FAF9F6</item>
+        <item name="android:windowBackground">#181616</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowSplashScreenBackground">#FAF9F6</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_dayflow_logo</item>
+        <item name="android:windowSplashScreenBackground">#181616</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_dayflow_logo_dark</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
     </style>
 </resources>

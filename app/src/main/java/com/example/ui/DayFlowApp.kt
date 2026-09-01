@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.FloatingActionButton
@@ -30,8 +29,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,8 +40,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.ui.components.AddHabitSheet
 import com.example.ui.components.AddTaskSheet
 import com.example.ui.components.DayFlowTopBar
+import com.example.ui.components.HabitProgressSheet
 import com.example.ui.navigation.DayFlowDestination
 import com.example.ui.screens.AiCoachScreen
 import com.example.ui.screens.CalendarScreen
@@ -70,15 +69,30 @@ fun DayFlowApp(
   val navBackStackEntry by navController.currentBackStackEntryAsState()
   val currentRoute = navBackStackEntry?.destination?.route ?: DayFlowDestination.Today.route
 
-  val tasks by viewModel.tasks.collectAsStateWithLifecycle()
-  val habits by viewModel.habits.collectAsStateWithLifecycle()
+  val todayTasks by viewModel.todayTasks.collectAsStateWithLifecycle()
+  val todayHabits by viewModel.todayHabits.collectAsStateWithLifecycle()
+  val allTasks by viewModel.allTasks.collectAsStateWithLifecycle()
+  val allHabits by viewModel.allHabits.collectAsStateWithLifecycle()
   val goals by viewModel.goals.collectAsStateWithLifecycle()
   val calendarEvents by viewModel.calendarEvents.collectAsStateWithLifecycle()
   val coachInsights by viewModel.coachInsights.collectAsStateWithLifecycle()
   val summary by viewModel.progressSummary.collectAsStateWithLifecycle()
+  val selectedTodayDate by viewModel.selectedTodayDate.collectAsStateWithLifecycle()
   val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
   val isAddTaskSheetOpen by viewModel.isAddTaskSheetOpen.collectAsStateWithLifecycle()
+  val editingTask by viewModel.editingTask.collectAsStateWithLifecycle()
+  val isAddHabitSheetOpen by viewModel.isAddHabitSheetOpen.collectAsStateWithLifecycle()
+  val habitForProgressSheet by viewModel.habitForProgressSheet.collectAsStateWithLifecycle()
   val selectedCalendarDate by viewModel.selectedCalendarDate.collectAsStateWithLifecycle()
+  val calendarTasks by viewModel.calendarTasks.collectAsStateWithLifecycle()
+  val calendarYear by viewModel.calendarYear.collectAsStateWithLifecycle()
+  val calendarMonth by viewModel.calendarMonth.collectAsStateWithLifecycle()
+  val statisticsData by viewModel.statisticsData.collectAsStateWithLifecycle()
+  val statsTimeRange by viewModel.statsTimeRange.collectAsStateWithLifecycle()
+  val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+  val notifications by viewModel.notifications.collectAsStateWithLifecycle()
+  val aiChatMessages by viewModel.aiChatMessages.collectAsStateWithLifecycle()
+  val isAiThinking by viewModel.isAiThinking.collectAsStateWithLifecycle()
 
   Scaffold(
     modifier = Modifier
@@ -106,7 +120,14 @@ fun DayFlowApp(
     floatingActionButton = {
       if (currentRoute == DayFlowDestination.Today.route || currentRoute == DayFlowDestination.Calendar.route) {
         FloatingActionButton(
-          onClick = { viewModel.openAddTaskSheet() },
+          onClick = {
+            val targetDate = if (currentRoute == DayFlowDestination.Calendar.route) {
+              selectedCalendarDate
+            } else {
+              selectedTodayDate
+            }
+            viewModel.openAddTaskSheet(targetDate)
+          },
           containerColor = DayFlowPrimary,
           contentColor = DayFlowOnPrimary,
           shape = CircleShape,
@@ -150,23 +171,36 @@ fun DayFlowApp(
     ) {
       composable(DayFlowDestination.Today.route) {
         TodayScreen(
-          tasks = tasks,
-          habits = habits,
+          tasks = todayTasks,
+          habits = todayHabits,
           summary = summary,
+          selectedDate = selectedTodayDate,
+          onSelectDate = { viewModel.selectTodayDate(it) },
           selectedCategory = selectedCategory,
           onToggleTask = { viewModel.toggleTask(it) },
+          onEditTask = { viewModel.openEditTaskSheet(it) },
           onDeleteTask = { viewModel.deleteTask(it) },
           onToggleHabit = { viewModel.toggleHabit(it) },
+          onOpenHabitProgress = { viewModel.openHabitProgressSheet(it) },
+          onAddHabitClick = { viewModel.openAddHabitSheet() },
           onSelectCategory = { viewModel.setCategoryFilter(it) },
-          onAddTaskClick = { viewModel.openAddTaskSheet() }
+          onAddTaskClick = { viewModel.openAddTaskSheet(selectedTodayDate) }
         )
       }
 
       composable(DayFlowDestination.Calendar.route) {
         CalendarScreen(
-          events = calendarEvents,
+          tasks = calendarTasks,
+          allTasks = allTasks,
           selectedDate = selectedCalendarDate,
-          onSelectDate = { viewModel.setSelectedCalendarDate(it) }
+          year = calendarYear,
+          month = calendarMonth,
+          onSelectDate = { viewModel.setSelectedCalendarDate(it) },
+          onPrevMonth = { viewModel.prevCalendarMonth() },
+          onNextMonth = { viewModel.nextCalendarMonth() },
+          onToggleTask = { viewModel.toggleTask(it) },
+          onEditTask = { viewModel.openEditTaskSheet(it) },
+          onAddTaskClick = { viewModel.openAddTaskSheet(selectedCalendarDate) }
         )
       }
 
@@ -174,16 +208,23 @@ fun DayFlowApp(
         GoalsScreen(
           goals = goals,
           onUpdateGoalProgress = { id, inc -> viewModel.updateGoalProgress(id, inc) },
-          onAddGoal = { title, cat, target, unit, deadline ->
-            viewModel.addGoal(title, cat, target, unit, deadline)
+          onSetGoalProgress = { id, prog -> viewModel.setGoalProgress(id, prog) },
+          onToggleGoalCompletion = { id -> viewModel.toggleGoalCompletion(id) },
+          onUpdateGoal = { goal -> viewModel.updateGoal(goal) },
+          onDeleteGoal = { id -> viewModel.deleteGoal(id) },
+          onAddGoal = { title, desc, tag, cat, target, unit, deadline, initialProgress ->
+            viewModel.addGoal(title, desc, tag, cat, target, unit, deadline, initialProgress)
           }
         )
       }
 
       composable(DayFlowDestination.Statistics.route) {
         StatisticsScreen(
+          statisticsData = statisticsData,
+          selectedRange = statsTimeRange,
+          onSelectRange = { viewModel.setStatsTimeRange(it) },
           summary = summary,
-          tasks = tasks
+          tasks = allTasks
         )
       }
 
@@ -191,12 +232,24 @@ fun DayFlowApp(
         AiCoachScreen(
           insights = coachInsights,
           summary = summary,
-          onSendPrompt = { viewModel.sendCoachPrompt(it) }
+          chatMessages = aiChatMessages,
+          isThinking = isAiThinking,
+          onSendPrompt = { viewModel.sendCoachPrompt(it) },
+          onTriggerAction = { viewModel.triggerCoachAction(it) }
         )
       }
 
       composable(DayFlowDestination.Settings.route) {
         SettingsScreen(
+          themeMode = themeMode,
+          onThemeModeChange = { viewModel.setThemeMode(it) },
+          notifications = notifications,
+          onNotificationsEnabledChange = { viewModel.setNotificationsEnabled(it) },
+          onMorningBriefingChange = { viewModel.setMorningBriefing(it) },
+          onEveningReviewChange = { viewModel.setEveningReview(it) },
+          onHabitRemindersChange = { viewModel.setHabitReminders(it) },
+          onExportBackup = { viewModel.exportBackupJson() },
+          onImportBackup = { viewModel.importBackupJson(it) },
           onNavigateBack = { navController.popBackStack() }
         )
       }
@@ -209,6 +262,38 @@ fun DayFlowApp(
     onDismiss = { viewModel.closeAddTaskSheet() },
     onAddTask = { title, desc, cat, prio, time, duration ->
       viewModel.addTask(title, desc, cat, prio, time, duration)
+    }
+  )
+
+  // Edit Task Modal Bottom Sheet
+  AddTaskSheet(
+    isOpen = editingTask != null,
+    taskToEdit = editingTask,
+    onDismiss = { viewModel.closeEditTaskSheet() },
+    onAddTask = { _, _, _, _, _, _ -> },
+    onUpdateTask = { updatedTask -> viewModel.updateTask(updatedTask) },
+    onDeleteTask = { taskId -> viewModel.deleteTask(taskId) }
+  )
+
+  // Add Habit Modal Bottom Sheet
+  AddHabitSheet(
+    isOpen = isAddHabitSheetOpen,
+    onDismiss = { viewModel.closeAddHabitSheet() },
+    onAddHabit = { title, category, dailyTarget, unit, reminderTime ->
+      viewModel.addHabit(title, category, dailyTarget, unit, reminderTime)
+    }
+  )
+
+  // Habit Progress Modal Bottom Sheet
+  HabitProgressSheet(
+    habit = habitForProgressSheet,
+    isOpen = habitForProgressSheet != null,
+    onDismiss = { viewModel.closeHabitProgressSheet() },
+    onUpdateProgress = { habitId, newProgress ->
+      viewModel.updateHabitProgress(habitId, newProgress)
+    },
+    onDeleteHabit = { habitId ->
+      viewModel.deleteHabit(habitId)
     }
   )
 }
@@ -288,4 +373,3 @@ private fun StitchNavItem(
     )
   }
 }
-

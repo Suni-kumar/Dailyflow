@@ -34,10 +34,15 @@ class GreetingScreenshotTest {
           tasks = tasks,
           habits = habits,
           summary = summary,
+          selectedDate = com.example.util.DateUtils.getTodayDateKey(),
+          onSelectDate = {},
           selectedCategory = null,
           onToggleTask = {},
+          onEditTask = {},
           onDeleteTask = {},
           onToggleHabit = {},
+          onOpenHabitProgress = {},
+          onAddHabitClick = {},
           onSelectCategory = {},
           onAddTaskClick = {}
         )

@@ -15,6 +15,9 @@ interface TaskDao {
   @Query("SELECT * FROM tasks ORDER BY createdAt DESC")
   fun getAllTasks(): Flow<List<TaskEntity>>
 
+  @Query("SELECT * FROM tasks ORDER BY createdAt DESC")
+  suspend fun getAllTasksList(): List<TaskEntity>
+
   @Query("SELECT * FROM tasks WHERE dueDate = :date ORDER BY createdAt DESC")
   fun getTasksByDate(date: String): Flow<List<TaskEntity>>
 

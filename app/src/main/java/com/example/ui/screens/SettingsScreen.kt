@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,264 +24,594 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.WorkspacePremium
-import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.CloudSync
+import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material.icons.outlined.WorkspacePremium
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.BuildConfig
+import com.example.data.local.AppThemeMode
+import com.example.data.local.NotificationPreferences
 import com.example.ui.theme.DayFlowBackground
 import com.example.ui.theme.DayFlowCardBorder
 import com.example.ui.theme.DayFlowOnPrimary
-import com.example.ui.theme.DayFlowOnPrimaryContainer
 import com.example.ui.theme.DayFlowOnSurface
 import com.example.ui.theme.DayFlowOnSurfaceVariant
-import com.example.ui.theme.DayFlowOutline
 import com.example.ui.theme.DayFlowOutlineVariant
 import com.example.ui.theme.DayFlowPrimary
 import com.example.ui.theme.DayFlowPrimaryContainer
-import com.example.ui.theme.DayFlowPrimaryFixed
 import com.example.ui.theme.DayFlowSecondary
 import com.example.ui.theme.DayFlowSurface
 import com.example.ui.theme.DayFlowSurfaceContainerLow
-import com.example.ui.theme.DayFlowSurfaceContainerLowest
 import com.example.ui.theme.DayFlowSurfaceVariant
 import com.example.ui.theme.DayFlowTertiary
+import com.example.util.DateUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-private val DayFlowErrorRed = Color(0xFFBA1A1A)
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
+  themeMode: AppThemeMode = AppThemeMode.SYSTEM,
+  onThemeModeChange: (AppThemeMode) -> Unit = {},
+  notifications: NotificationPreferences = NotificationPreferences(),
+  onNotificationsEnabledChange: (Boolean) -> Unit = {},
+  onMorningBriefingChange: (Boolean) -> Unit = {},
+  onEveningReviewChange: (Boolean) -> Unit = {},
+  onHabitRemindersChange: (Boolean) -> Unit = {},
+  onExportBackup: suspend () -> String = { "" },
+  onImportBackup: suspend (String) -> Result<com.example.data.local.ImportResultSummary> = { Result.failure(Exception()) },
   onNavigateBack: () -> Unit = {}
 ) {
-  Column(
+  val context = LocalContext.current
+  val coroutineScope = rememberCoroutineScope()
+  val snackbarHostState = remember { SnackbarHostState() }
+
+  var showThemeDialog by remember { mutableStateOf(false) }
+  var showNotificationsSheet by remember { mutableStateOf(false) }
+  var showPrivacySheet by remember { mutableStateOf(false) }
+  var showAboutSheet by remember { mutableStateOf(false) }
+
+  // Import Confirmation Dialog state
+  var pendingImportJson by remember { mutableStateOf<String?>(null) }
+  var showImportConfirmDialog by remember { mutableStateOf(false) }
+
+  // File picker for Export
+  val exportLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.CreateDocument("application/json")
+  ) { uri: Uri? ->
+    if (uri != null) {
+      coroutineScope.launch {
+        try {
+          val json = onExportBackup()
+          withContext(Dispatchers.IO) {
+            context.contentResolver.openOutputStream(uri)?.use { stream ->
+              stream.write(json.toByteArray())
+            }
+          }
+          snackbarHostState.showSnackbar("Backup successfully exported!")
+        } catch (e: Exception) {
+          snackbarHostState.showSnackbar("Export failed: ${e.message}")
+        }
+      }
+    }
+  }
+
+  // File picker for Import
+  val importLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.GetContent()
+  ) { uri: Uri? ->
+    if (uri != null) {
+      coroutineScope.launch {
+        try {
+          val json = withContext(Dispatchers.IO) {
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+              stream.bufferedReader().readText()
+            }
+          }
+          if (!json.isNullOrBlank()) {
+            pendingImportJson = json
+            showImportConfirmDialog = true
+          } else {
+            snackbarHostState.showSnackbar("Selected file was empty.")
+          }
+        } catch (e: Exception) {
+          snackbarHostState.showSnackbar("Could not read file: ${e.message}")
+        }
+      }
+    }
+  }
+
+  Scaffold(
+    snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+    containerColor = DayFlowBackground,
     modifier = Modifier
       .fillMaxSize()
-      .background(DayFlowBackground)
       .testTag("settings_screen")
-  ) {
-    // 1. Top Bar with back button and centered Title
-    Row(
+  ) { innerPadding ->
+    Column(
       modifier = Modifier
-        .fillMaxWidth()
-        .statusBarsPadding()
-        .height(60.dp)
-        .padding(horizontal = 16.dp),
-      horizontalArrangement = Arrangement.SpaceBetween,
-      verticalAlignment = Alignment.CenterVertically
+        .fillMaxSize()
+        .padding(innerPadding)
     ) {
-      IconButton(
-        onClick = onNavigateBack,
+      // 1. Top Bar
+      Row(
         modifier = Modifier
-          .size(40.dp)
-          .testTag("settings_back_button")
+          .fillMaxWidth()
+          .statusBarsPadding()
+          .height(60.dp)
+          .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
       ) {
-        Icon(
-          imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-          contentDescription = "Back",
-          tint = DayFlowOnSurfaceVariant
+        IconButton(
+          onClick = onNavigateBack,
+          modifier = Modifier
+            .size(40.dp)
+            .testTag("settings_back_button")
+        ) {
+          Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+            contentDescription = "Back",
+            tint = DayFlowOnSurfaceVariant
+          )
+        }
+
+        Text(
+          text = "Settings",
+          style = MaterialTheme.typography.titleLarge.copy(
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Normal
+          ),
+          color = DayFlowOnSurface
         )
+
+        Box(modifier = Modifier.size(40.dp))
       }
 
-      Text(
-        text = "Settings",
-        style = MaterialTheme.typography.titleLarge.copy(
-          fontSize = 20.sp,
-          fontWeight = FontWeight.Normal
-        ),
-        color = DayFlowOnSurface
-      )
+      // 2. Settings Content
+      LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+      ) {
+        // Group 1: PREFERENCES
+        item {
+          SettingsGroupSection(title = "PREFERENCES") {
+            SettingsItemRow(
+              icon = Icons.Outlined.Notifications,
+              title = "Notifications",
+              value = if (notifications.isEnabled) "Enabled" else "Off",
+              onClick = { showNotificationsSheet = true },
+              testTag = "settings_item_notifications"
+            )
 
-      // Spacer for symmetry
-      Box(modifier = Modifier.size(40.dp))
-    }
+            SettingsRowDivider()
 
-    // 2. Settings Content
-    LazyColumn(
-      modifier = Modifier.fillMaxSize(),
-      contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
-      verticalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
-      // Premium Card
-      item {
-        Surface(
-          modifier = Modifier
-            .fillMaxWidth()
-            .testTag("settings_premium_card"),
-          shape = RoundedCornerShape(16.dp),
-          color = DayFlowSurfaceContainerLow,
-          border = BorderStroke(1.dp, DayFlowOutlineVariant.copy(alpha = 0.5f))
-        ) {
-          Column(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(20.dp)
-          ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-              Icon(
-                imageVector = Icons.Filled.WorkspacePremium,
-                contentDescription = null,
-                tint = DayFlowPrimary,
-                modifier = Modifier.size(24.dp)
-              )
-              Text(
-                text = "DayFlow Premium",
-                style = MaterialTheme.typography.titleMedium.copy(
-                  fontSize = 18.sp,
-                  fontWeight = FontWeight.Medium
-                ),
-                color = DayFlowOnSurface
-              )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-              text = "Unlock serene data visualization and advanced mindful tracking tools.",
-              style = MaterialTheme.typography.bodySmall.copy(
-                fontSize = 14.sp,
-                lineHeight = 20.sp
-              ),
-              color = DayFlowOnSurfaceVariant
+            SettingsItemRow(
+              icon = Icons.Outlined.Palette,
+              title = "Theme",
+              value = themeMode.displayName,
+              onClick = { showThemeDialog = true },
+              testTag = "settings_item_theme"
             )
           }
         }
-      }
 
-      // Group 1: ACCOUNT
-      item {
-        SettingsGroupSection(title = "ACCOUNT") {
-          SettingsItemRow(
-            icon = Icons.Outlined.Person,
-            title = "Profile",
-            value = null,
-            onClick = {},
-            testTag = "settings_item_profile"
-          )
+        // Group 2: DATA & BACKUP
+        item {
+          SettingsGroupSection(title = "DATA & BACKUP") {
+            SettingsItemRow(
+              icon = Icons.Outlined.CloudUpload,
+              title = "Export Data",
+              value = "JSON file",
+              onClick = {
+                val defaultFileName = "DayFlow_Backup_${DateUtils.getTodayDateKey()}.json"
+                exportLauncher.launch(defaultFileName)
+              },
+              testTag = "settings_item_export"
+            )
 
-          SettingsRowDivider()
+            SettingsRowDivider()
 
-          SettingsItemRow(
-            icon = Icons.Outlined.CloudSync,
-            title = "Data Sync",
-            value = "Just now",
-            onClick = {},
-            testTag = "settings_item_data_sync"
-          )
+            SettingsItemRow(
+              icon = Icons.Outlined.CloudDownload,
+              title = "Import Data",
+              value = "Restore from file",
+              onClick = {
+                importLauncher.launch("application/json")
+              },
+              testTag = "settings_item_import"
+            )
+          }
+        }
+
+        // Group 3: SUPPORT & INFORMATION
+        item {
+          SettingsGroupSection(title = "SUPPORT & PRIVACY") {
+            SettingsItemRow(
+              icon = Icons.Outlined.Shield,
+              title = "Privacy & Security",
+              value = "Local first",
+              onClick = { showPrivacySheet = true },
+              testTag = "settings_item_privacy"
+            )
+
+            SettingsRowDivider()
+
+            SettingsItemRow(
+              icon = Icons.Outlined.Info,
+              title = "About DayFlow",
+              value = "v${BuildConfig.VERSION_NAME}",
+              onClick = { showAboutSheet = true },
+              testTag = "settings_item_about"
+            )
+          }
+        }
+
+        item {
+          Spacer(modifier = Modifier.height(48.dp))
         }
       }
+    }
+  }
 
-      // Group 2: PREFERENCES
-      item {
-        SettingsGroupSection(title = "PREFERENCES") {
-          SettingsItemRow(
-            icon = Icons.Outlined.Notifications,
-            title = "Notifications",
-            value = null,
-            onClick = {},
-            testTag = "settings_item_notifications"
-          )
-
-          SettingsRowDivider()
-
-          SettingsItemRow(
-            icon = Icons.Outlined.Palette,
-            title = "Theme",
-            value = "System default",
-            onClick = {},
-            testTag = "settings_item_theme"
-          )
-
-          SettingsRowDivider()
-
-          SettingsItemRow(
-            icon = Icons.Outlined.Tune,
-            title = "Dashboard Layout",
-            value = null,
-            onClick = {},
-            testTag = "settings_item_layout"
-          )
+  // --- Theme Selection Dialog ---
+  if (showThemeDialog) {
+    AlertDialog(
+      onDismissRequest = { showThemeDialog = false },
+      title = {
+        Text(
+          text = "Choose Theme",
+          style = MaterialTheme.typography.titleMedium,
+          color = DayFlowOnSurface
+        )
+      },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          AppThemeMode.entries.forEach { mode ->
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable {
+                  onThemeModeChange(mode)
+                  showThemeDialog = false
+                }
+                .padding(vertical = 8.dp, horizontal = 4.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              RadioButton(
+                selected = themeMode == mode,
+                onClick = {
+                  onThemeModeChange(mode)
+                  showThemeDialog = false
+                },
+                colors = RadioButtonDefaults.colors(
+                  selectedColor = DayFlowPrimary,
+                  unselectedColor = DayFlowOnSurfaceVariant
+                )
+              )
+              Spacer(modifier = Modifier.width(12.dp))
+              Text(
+                text = mode.displayName,
+                style = MaterialTheme.typography.bodyLarge,
+                color = DayFlowOnSurface
+              )
+            }
+          }
         }
-      }
-
-      // Group 3: SUPPORT
-      item {
-        SettingsGroupSection(title = "SUPPORT") {
-          SettingsItemRow(
-            icon = Icons.Outlined.Shield,
-            title = "Privacy & Security",
-            value = null,
-            onClick = {},
-            testTag = "settings_item_privacy"
-          )
-
-          SettingsRowDivider()
-
-          SettingsItemRow(
-            icon = Icons.Outlined.Info,
-            title = "About DayFlow",
-            value = "v2.4.1",
-            onClick = {},
-            testTag = "settings_item_about"
-          )
+      },
+      confirmButton = {
+        TextButton(onClick = { showThemeDialog = false }) {
+          Text("Cancel", color = DayFlowPrimary)
         }
-      }
+      },
+      containerColor = DayFlowSurface,
+      shape = RoundedCornerShape(16.dp)
+    )
+  }
 
-      // Sign Out Button
-      item {
+  // --- Import Confirmation Dialog ---
+  if (showImportConfirmDialog && pendingImportJson != null) {
+    AlertDialog(
+      onDismissRequest = {
+        showImportConfirmDialog = false
+        pendingImportJson = null
+      },
+      title = {
+        Text(
+          text = "Restore DayFlow Data?",
+          style = MaterialTheme.typography.titleMedium,
+          color = DayFlowOnSurface
+        )
+      },
+      text = {
+        Text(
+          text = "Restoring this backup will replace your current tasks, habits, and goals with the data from the backup file.\n\nAre you sure you want to proceed?",
+          style = MaterialTheme.typography.bodyMedium,
+          color = DayFlowOnSurfaceVariant
+        )
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            val jsonToRestore = pendingImportJson
+            showImportConfirmDialog = false
+            pendingImportJson = null
+            if (jsonToRestore != null) {
+              coroutineScope.launch {
+                val result = onImportBackup(jsonToRestore)
+                if (result.isSuccess) {
+                  val summary = result.getOrNull()
+                  snackbarHostState.showSnackbar(summary?.message ?: "Data successfully restored!")
+                } else {
+                  val error = result.exceptionOrNull()?.message ?: "Failed to restore data."
+                  snackbarHostState.showSnackbar("Import failed: $error")
+                }
+              }
+            }
+          },
+          colors = ButtonDefaults.buttonColors(
+            containerColor = DayFlowPrimary,
+            contentColor = DayFlowOnPrimary
+          )
+        ) {
+          Text("Restore")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = {
+          showImportConfirmDialog = false
+          pendingImportJson = null
+        }) {
+          Text("Cancel", color = DayFlowOnSurfaceVariant)
+        }
+      },
+      containerColor = DayFlowSurface,
+      shape = RoundedCornerShape(16.dp)
+    )
+  }
+
+  // --- Notifications Bottom Sheet ---
+  if (showNotificationsSheet) {
+    ModalBottomSheet(
+      onDismissRequest = { showNotificationsSheet = false },
+      sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+      containerColor = DayFlowSurface,
+      shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    ) {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 24.dp, vertical = 12.dp)
+      ) {
+        Text(
+          text = "Notification Preferences",
+          style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
+          color = DayFlowOnSurface
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        NotificationToggleRow(
+          title = "Allow Notifications",
+          subtitle = "Master switch for all DayFlow reminders",
+          checked = notifications.isEnabled,
+          onCheckedChange = onNotificationsEnabledChange
+        )
+
+        SettingsRowDivider()
+
+        NotificationToggleRow(
+          title = "Daily Morning Briefing",
+          subtitle = "Gentle morning overview at 08:00 AM",
+          checked = notifications.morningBriefing && notifications.isEnabled,
+          enabled = notifications.isEnabled,
+          onCheckedChange = onMorningBriefingChange
+        )
+
+        SettingsRowDivider()
+
+        NotificationToggleRow(
+          title = "Evening Reflection",
+          subtitle = "Mindful review of today's progress at 09:00 PM",
+          checked = notifications.eveningReview && notifications.isEnabled,
+          enabled = notifications.isEnabled,
+          onCheckedChange = onEveningReviewChange
+        )
+
+        SettingsRowDivider()
+
+        NotificationToggleRow(
+          title = "Habit Reminders",
+          subtitle = "Timely alerts for configured habit schedule times",
+          checked = notifications.habitReminders && notifications.isEnabled,
+          enabled = notifications.isEnabled,
+          onCheckedChange = onHabitRemindersChange
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+      }
+    }
+  }
+
+  // --- Privacy & Security Sheet ---
+  if (showPrivacySheet) {
+    ModalBottomSheet(
+      onDismissRequest = { showPrivacySheet = false },
+      sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+      containerColor = DayFlowSurface,
+      shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    ) {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 24.dp, vertical = 12.dp)
+      ) {
+        Text(
+          text = "Privacy & Security",
+          style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
+          color = DayFlowOnSurface
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        PrivacyPoint(
+          title = "100% Local-First Storage",
+          description = "All tasks, habits, daily reflections, and goal milestones are stored strictly in your device's local Room database."
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        PrivacyPoint(
+          title = "User-Controlled JSON Backups",
+          description = "Exporting data generates a standard JSON file saved directly to your local file system. DayFlow never transmits backups to third-party servers."
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        PrivacyPoint(
+          title = "Mindful AI Summarization",
+          description = "When interacting with the AI Coach, only high-level summary counts (such as total tasks completed and streak days) are processed. Raw database records and private notes are never sent."
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        PrivacyPoint(
+          title = "No Accounts & No Tracking",
+          description = "DayFlow contains no third-party telemetry, advertising SDKs, or background tracking services."
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+      }
+    }
+  }
+
+  // --- About DayFlow Sheet ---
+  if (showAboutSheet) {
+    ModalBottomSheet(
+      onDismissRequest = { showAboutSheet = false },
+      sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+      containerColor = DayFlowSurface,
+      shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    ) {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 24.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+      ) {
         Box(
           modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
+            .size(64.dp)
+            .clip(CircleShape)
+            .background(DayFlowPrimaryContainer),
           contentAlignment = Alignment.Center
         ) {
-          Text(
-            text = "Sign Out",
-            style = MaterialTheme.typography.bodyMedium.copy(
-              fontSize = 15.sp,
-              fontWeight = FontWeight.Medium
-            ),
-            color = DayFlowErrorRed,
-            modifier = Modifier
-              .clickable { }
-              .padding(horizontal = 16.dp, vertical = 8.dp)
-              .testTag("settings_sign_out")
+          Icon(
+            imageVector = Icons.Outlined.Info,
+            contentDescription = null,
+            tint = DayFlowPrimary,
+            modifier = Modifier.size(32.dp)
           )
         }
-      }
 
-      item {
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+          text = "DayFlow",
+          style = MaterialTheme.typography.titleLarge.copy(
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Medium
+          ),
+          color = DayFlowOnSurface
+        )
+
+        Text(
+          text = "Version ${BuildConfig.VERSION_NAME}",
+          style = MaterialTheme.typography.bodySmall,
+          color = DayFlowOnSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+          text = "A mindful daily planner and habit companion built with modern Android Jetpack Compose and local-first architecture.",
+          style = MaterialTheme.typography.bodyMedium.copy(
+            lineHeight = 22.sp
+          ),
+          color = DayFlowOnSurfaceVariant,
+          textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+          modifier = Modifier.padding(horizontal = 16.dp)
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Surface(
+          shape = RoundedCornerShape(12.dp),
+          color = DayFlowSurfaceContainerLow,
+          border = BorderStroke(1.dp, DayFlowOutlineVariant.copy(alpha = 0.5f)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+              text = "Crafted with Intentionality",
+              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+              color = DayFlowOnSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+              text = "Kotlin • Jetpack Compose • Room Database • Material 3",
+              style = MaterialTheme.typography.bodySmall,
+              color = DayFlowTertiary
+            )
+          }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
       }
     }
   }
@@ -382,4 +715,76 @@ private fun SettingsRowDivider() {
       .height(1.dp)
       .background(DayFlowSurfaceVariant.copy(alpha = 0.6f))
   )
+}
+
+@Composable
+private fun NotificationToggleRow(
+  title: String,
+  subtitle: String,
+  checked: Boolean,
+  enabled: Boolean = true,
+  onCheckedChange: (Boolean) -> Unit
+) {
+  Row(
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(vertical = 12.dp),
+    horizontalArrangement = Arrangement.SpaceBetween,
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    Column(modifier = Modifier.weight(1f)) {
+      Text(
+        text = title,
+        style = MaterialTheme.typography.bodyMedium.copy(
+          fontSize = 15.sp,
+          fontWeight = FontWeight.Medium
+        ),
+        color = if (enabled) DayFlowOnSurface else DayFlowOnSurfaceVariant.copy(alpha = 0.5f)
+      )
+      Spacer(modifier = Modifier.height(2.dp))
+      Text(
+        text = subtitle,
+        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+        color = if (enabled) DayFlowOnSurfaceVariant else DayFlowOnSurfaceVariant.copy(alpha = 0.4f)
+      )
+    }
+
+    Switch(
+      checked = checked,
+      onCheckedChange = onCheckedChange,
+      enabled = enabled,
+      colors = SwitchDefaults.colors(
+        checkedThumbColor = DayFlowOnPrimary,
+        checkedTrackColor = DayFlowPrimary,
+        uncheckedThumbColor = DayFlowOnSurfaceVariant,
+        uncheckedTrackColor = DayFlowSurfaceVariant
+      )
+    )
+  }
+}
+
+@Composable
+private fun PrivacyPoint(
+  title: String,
+  description: String
+) {
+  Column(modifier = Modifier.fillMaxWidth()) {
+    Text(
+      text = title,
+      style = MaterialTheme.typography.bodyMedium.copy(
+        fontSize = 15.sp,
+        fontWeight = FontWeight.SemiBold
+      ),
+      color = DayFlowOnSurface
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+    Text(
+      text = description,
+      style = MaterialTheme.typography.bodySmall.copy(
+        fontSize = 13.sp,
+        lineHeight = 18.sp
+      ),
+      color = DayFlowOnSurfaceVariant
+    )
+  }
 }

@@ -19,32 +19,37 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.CheckCircleOutline
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.SelfImprovement
 import androidx.compose.material.icons.outlined.WaterDrop
+import androidx.compose.material.icons.outlined.WorkOutline
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -66,36 +71,29 @@ import com.example.ui.theme.DayFlowSurface
 import com.example.ui.theme.DayFlowSurfaceContainerLow
 import com.example.ui.theme.DayFlowSurfaceContainerLowest
 import com.example.ui.theme.DayFlowSurfaceVariant
-
-data class DayItem(
-  val dayOfWeek: String,
-  val dayNumber: String,
-  val hasIndicator: Boolean = false,
-  val isSelected: Boolean = false
-)
+import com.example.util.DateUtils
+import com.example.util.DayFlowDateItem
 
 @Composable
 fun TodayScreen(
   tasks: List<TaskItem>,
   habits: List<HabitItem>,
   summary: DailyProgressSummary,
+  selectedDate: String,
+  onSelectDate: (String) -> Unit,
   selectedCategory: ItemCategory?,
   onToggleTask: (String) -> Unit,
+  onEditTask: (TaskItem) -> Unit,
   onDeleteTask: (String) -> Unit,
   onToggleHabit: (String) -> Unit,
+  onOpenHabitProgress: (HabitItem) -> Unit,
+  onAddHabitClick: () -> Unit,
   onSelectCategory: (ItemCategory?) -> Unit,
   onAddTaskClick: () -> Unit
 ) {
-  var selectedDayIndex by remember { mutableStateOf(2) } // Default to WED 14
-
-  val days = listOf(
-    DayItem("MON", "12"),
-    DayItem("TUE", "13"),
-    DayItem("WED", "14", hasIndicator = true),
-    DayItem("THU", "15", hasIndicator = true),
-    DayItem("FRI", "16"),
-    DayItem("SAT", "17")
-  )
+  val weekDays = remember(selectedDate) {
+    DateUtils.getCurrentWeekDays(selectedDate)
+  }
 
   LazyColumn(
     modifier = Modifier
@@ -106,37 +104,40 @@ fun TodayScreen(
     verticalArrangement = Arrangement.spacedBy(24.dp)
   ) {
     // 1. Date Selector
-    item {
+    item(key = "date_selector") {
       DateSelectorSection(
-        days = days,
-        selectedIndex = selectedDayIndex,
-        onSelectDay = { selectedDayIndex = it }
+        days = weekDays,
+        selectedDate = selectedDate,
+        onSelectDate = onSelectDate
       )
     }
 
     // 2. Daily Progress Summary Card
-    item {
+    item(key = "daily_summary") {
       DailyProgressCard(summary = summary)
     }
 
     // 3. Your Day (Task Cards)
-    item {
+    item(key = "your_day_section") {
       YourDaySection(
         tasks = tasks,
         onToggleTask = onToggleTask,
-        onDeleteTask = onDeleteTask
+        onEditTask = onEditTask,
+        onAddTaskClick = onAddTaskClick
       )
     }
 
     // 4. Habits Section
-    item {
+    item(key = "habits_section") {
       HabitsSection(
         habits = habits,
-        onToggleHabit = onToggleHabit
+        onToggleHabit = onToggleHabit,
+        onOpenHabitProgress = onOpenHabitProgress,
+        onAddHabitClick = onAddHabitClick
       )
     }
 
-    item {
+    item(key = "bottom_spacer") {
       Spacer(modifier = Modifier.height(64.dp))
     }
   }
@@ -144,9 +145,9 @@ fun TodayScreen(
 
 @Composable
 private fun DateSelectorSection(
-  days: List<DayItem>,
-  selectedIndex: Int,
-  onSelectDay: (Int) -> Unit
+  days: List<DayFlowDateItem>,
+  selectedDate: String,
+  onSelectDate: (String) -> Unit
 ) {
   Column(modifier = Modifier.fillMaxWidth()) {
     Row(
@@ -157,13 +158,13 @@ private fun DateSelectorSection(
       horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically
     ) {
-      days.forEachIndexed { index, day ->
-        val isSelected = index == selectedIndex
+      days.forEach { day ->
+        val isSelected = day.dateKey == selectedDate
 
         Column(
           horizontalAlignment = Alignment.CenterHorizontally,
           modifier = Modifier
-            .clickable { onSelectDay(index) }
+            .clickable { onSelectDate(day.dateKey) }
             .then(
               if (isSelected) {
                 Modifier
@@ -200,7 +201,7 @@ private fun DateSelectorSection(
             color = if (isSelected) DayFlowOnPrimaryContainer else DayFlowOnSurface
           )
 
-          if (day.hasIndicator) {
+          if (day.isToday || day.hasIndicator) {
             Spacer(modifier = Modifier.height(3.dp))
             Box(
               modifier = Modifier
@@ -227,8 +228,9 @@ private fun DateSelectorSection(
 
 @Composable
 private fun DailyProgressCard(summary: DailyProgressSummary) {
-  val percent = (summary.completionRate * 100).toInt().coerceIn(0, 100)
-  val displayPercent = if (percent == 0 && summary.totalTasks > 0) 68 else if (percent == 0) 68 else percent
+  val percent = if (summary.totalTasks > 0) {
+    (summary.completionRate * 100).toInt().coerceIn(0, 100)
+  } else 0
 
   Surface(
     modifier = Modifier
@@ -254,12 +256,13 @@ private fun DailyProgressCard(summary: DailyProgressSummary) {
         Spacer(modifier = Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.Bottom) {
           Text(
-            text = "$displayPercent",
+            text = "$percent",
             style = MaterialTheme.typography.displayMedium.copy(
               fontSize = 36.sp,
               fontWeight = FontWeight.Light
             ),
-            color = DayFlowOnSurface
+            color = DayFlowOnSurface,
+            modifier = Modifier.testTag("daily_progress_percent")
           )
           Spacer(modifier = Modifier.width(4.dp))
           Text(
@@ -269,12 +272,17 @@ private fun DailyProgressCard(summary: DailyProgressSummary) {
             modifier = Modifier.padding(bottom = 6.dp)
           )
         }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+          text = if (summary.totalTasks > 0) "${summary.completedTasks} of ${summary.totalTasks} tasks completed" else "No tasks scheduled today",
+          style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+          color = DayFlowOnSurfaceVariant.copy(alpha = 0.75f)
+        )
       }
 
-      // Circular Progress Indicator (Stitch styling)
+      // Circular Progress Indicator
       Box(
-        modifier = Modifier
-          .size(60.dp),
+        modifier = Modifier.size(60.dp),
         contentAlignment = Alignment.Center
       ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -283,13 +291,15 @@ private fun DailyProgressCard(summary: DailyProgressSummary) {
             color = DayFlowSurfaceVariant,
             style = Stroke(width = strokeWidth)
           )
-          drawArc(
-            color = DayFlowPrimary,
-            startAngle = -90f,
-            sweepAngle = (displayPercent / 100f) * 360f,
-            useCenter = false,
-            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-          )
+          if (percent > 0) {
+            drawArc(
+              color = DayFlowPrimary,
+              startAngle = -90f,
+              sweepAngle = (percent / 100f) * 360f,
+              useCenter = false,
+              style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+            )
+          }
         }
       }
     }
@@ -300,30 +310,79 @@ private fun DailyProgressCard(summary: DailyProgressSummary) {
 private fun YourDaySection(
   tasks: List<TaskItem>,
   onToggleTask: (String) -> Unit,
-  onDeleteTask: (String) -> Unit
+  onEditTask: (TaskItem) -> Unit,
+  onAddTaskClick: () -> Unit
 ) {
   Column(modifier = Modifier.fillMaxWidth()) {
-    Text(
-      text = "Your Day",
-      style = MaterialTheme.typography.titleLarge.copy(
-        fontSize = 18.sp,
-        fontWeight = FontWeight.Medium
-      ),
-      color = DayFlowOnSurface
-    )
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Text(
+        text = "Your Day",
+        style = MaterialTheme.typography.titleLarge.copy(
+          fontSize = 18.sp,
+          fontWeight = FontWeight.Medium
+        ),
+        color = DayFlowOnSurface
+      )
+    }
 
     Spacer(modifier = Modifier.height(14.dp))
 
-    Column(
-      modifier = Modifier.fillMaxWidth(),
-      verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-      tasks.forEachIndexed { index, task ->
-        StitchTaskCard(
-          task = task,
-          index = index,
-          onToggle = { onToggleTask(task.id) }
-        )
+    if (tasks.isEmpty()) {
+      Surface(
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(12.dp))
+          .clickable { onAddTaskClick() }
+          .testTag("tasks_empty_state"),
+        shape = RoundedCornerShape(12.dp),
+        color = DayFlowSurfaceContainerLow.copy(alpha = 0.6f),
+        border = BorderStroke(1.dp, DayFlowCardBorder)
+      ) {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 28.dp, horizontal = 16.dp),
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.Center
+        ) {
+          Icon(
+            imageVector = Icons.Default.Add,
+            contentDescription = null,
+            tint = DayFlowPrimary,
+            modifier = Modifier.size(24.dp)
+          )
+          Spacer(modifier = Modifier.height(8.dp))
+          Text(
+            text = "No tasks for this day",
+            style = MaterialTheme.typography.bodyMedium,
+            color = DayFlowOnSurface,
+            fontWeight = FontWeight.Medium
+          )
+          Spacer(modifier = Modifier.height(2.dp))
+          Text(
+            text = "Tap here or the + button to add a task",
+            style = MaterialTheme.typography.bodySmall,
+            color = DayFlowOnSurfaceVariant
+          )
+        }
+      }
+    } else {
+      Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+      ) {
+        tasks.forEachIndexed { index, task ->
+          StitchTaskCard(
+            task = task,
+            index = index,
+            onToggle = { onToggleTask(task.id) },
+            onClick = { onEditTask(task) }
+          )
+        }
       }
     }
   }
@@ -333,7 +392,8 @@ private fun YourDaySection(
 private fun StitchTaskCard(
   task: TaskItem,
   index: Int,
-  onToggle: () -> Unit
+  onToggle: () -> Unit,
+  onClick: () -> Unit
 ) {
   val isCompleted = task.isCompleted
   val isActive = !isCompleted && (index == 1 || (index == 0 && !isCompleted))
@@ -352,7 +412,7 @@ private fun StitchTaskCard(
   Surface(
     modifier = Modifier
       .fillMaxWidth()
-      .clickable { onToggle() }
+      .clickable { onClick() }
       .testTag("task_card_${task.id}"),
     shape = RoundedCornerShape(12.dp),
     color = cardBg,
@@ -376,11 +436,12 @@ private fun StitchTaskCard(
           .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
       ) {
-        // Leading Check/Status Circle
+        // Leading Check/Status Circle (clickable separately to toggle)
         Box(
           modifier = Modifier
-            .size(24.dp)
+            .size(28.dp)
             .clip(CircleShape)
+            .clickable { onToggle() }
             .then(
               when {
                 isCompleted -> Modifier
@@ -427,7 +488,7 @@ private fun StitchTaskCard(
           } else "15 min"
 
           Text(
-            text = "${task.time} • $durationStr",
+            text = "${task.time} • $durationStr • ${task.category.displayName}",
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
             color = DayFlowOnSurfaceVariant.copy(alpha = if (isCompleted) 0.6f else 0.85f)
           )
@@ -449,53 +510,141 @@ private fun StitchTaskCard(
 @Composable
 private fun HabitsSection(
   habits: List<HabitItem>,
-  onToggleHabit: (String) -> Unit
+  onToggleHabit: (String) -> Unit,
+  onOpenHabitProgress: (HabitItem) -> Unit,
+  onAddHabitClick: () -> Unit
 ) {
   Column(modifier = Modifier.fillMaxWidth()) {
-    Text(
-      text = "Habits",
-      style = MaterialTheme.typography.titleLarge.copy(
-        fontSize = 18.sp,
-        fontWeight = FontWeight.Medium
-      ),
-      color = DayFlowOnSurface
-    )
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Text(
+        text = "Habits",
+        style = MaterialTheme.typography.titleLarge.copy(
+          fontSize = 18.sp,
+          fontWeight = FontWeight.Medium
+        ),
+        color = DayFlowOnSurface
+      )
+
+      IconButton(
+        onClick = onAddHabitClick,
+        modifier = Modifier
+          .size(32.dp)
+          .testTag("add_habit_button")
+      ) {
+        Icon(
+          imageVector = Icons.Default.Add,
+          contentDescription = "Add Habit",
+          tint = DayFlowPrimary,
+          modifier = Modifier.size(20.dp)
+        )
+      }
+    }
 
     Spacer(modifier = Modifier.height(14.dp))
 
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-      // Habit 1: Hydration
-      val hydrationHabit = habits.find { it.title.contains("Hydrat", ignoreCase = true) } ?: habits.getOrNull(0)
-      HabitCard(
-        title = "Hydration",
-        subtitle = "3/5 L",
-        progress = 0.6f,
-        iconType = HabitIconType.WATER,
-        tintColor = DayFlowSecondary,
-        modifier = Modifier.weight(1f),
-        onClick = { hydrationHabit?.let { onToggleHabit(it.id) } }
-      )
+    if (habits.isEmpty()) {
+      Surface(
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(12.dp))
+          .clickable { onAddHabitClick() }
+          .testTag("habits_empty_state"),
+        shape = RoundedCornerShape(12.dp),
+        color = DayFlowSurfaceContainerLow.copy(alpha = 0.6f),
+        border = BorderStroke(1.dp, DayFlowCardBorder)
+      ) {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 24.dp, horizontal = 16.dp),
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.Center
+        ) {
+          Text(
+            text = "No habits tracked yet",
+            style = MaterialTheme.typography.bodyMedium,
+            color = DayFlowOnSurface,
+            fontWeight = FontWeight.Medium
+          )
+          Spacer(modifier = Modifier.height(2.dp))
+          Text(
+            text = "Tap + to build your daily habits",
+            style = MaterialTheme.typography.bodySmall,
+            color = DayFlowOnSurfaceVariant
+          )
+        }
+      }
+    } else {
+      // Habit cards displayed in responsive row/chunked rows
+      val habitChunks = habits.chunked(2)
+      Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+      ) {
+        habitChunks.forEach { rowHabits ->
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+          ) {
+            rowHabits.forEach { habit ->
+              val isMeasurable = habit.dailyTarget > 1 || habit.unit.isNotBlank()
+              val subtitle = if (isMeasurable) {
+                "${habit.currentProgress}/${habit.dailyTarget} ${habit.unit}".trim()
+              } else {
+                if (habit.completedToday) "Completed" else "Tap to complete"
+              }
 
-      // Habit 2: Reading
-      val readingHabit = habits.find { it.title.contains("Read", ignoreCase = true) } ?: habits.getOrNull(1)
-      HabitCard(
-        title = "Reading",
-        subtitle = "30/30 m",
-        progress = 1.0f,
-        iconType = HabitIconType.BOOK,
-        tintColor = DayFlowPrimary,
-        modifier = Modifier.weight(1f),
-        onClick = { readingHabit?.let { onToggleHabit(it.id) } }
-      )
+              val (icon, tint) = resolveHabitVisuals(habit)
+
+              HabitCard(
+                title = habit.title,
+                subtitle = subtitle,
+                progress = habit.progressFraction,
+                icon = icon,
+                tintColor = tint,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                  if (isMeasurable) {
+                    onOpenHabitProgress(habit)
+                  } else {
+                    onToggleHabit(habit.id)
+                  }
+                }
+              )
+            }
+
+            if (rowHabits.size == 1) {
+              Spacer(modifier = Modifier.weight(1f))
+            }
+          }
+        }
+      }
     }
   }
 }
 
-enum class HabitIconType {
-  WATER, BOOK
+private fun resolveHabitVisuals(habit: HabitItem): Pair<ImageVector, Color> {
+  val title = habit.title.lowercase()
+  return when {
+    title.contains("water") || title.contains("hydrat") || title.contains("drink") ->
+      Icons.Outlined.WaterDrop to DayFlowSecondary
+    title.contains("read") || title.contains("book") || title.contains("study") ->
+      Icons.Outlined.MenuBook to DayFlowPrimary
+    title.contains("run") || title.contains("gym") || title.contains("workout") || title.contains("fit") ->
+      Icons.Outlined.FitnessCenter to Color(0xFFEF4444)
+    title.contains("meditat") || title.contains("mind") || title.contains("breath") ->
+      Icons.Outlined.SelfImprovement to Color(0xFF06B6D4)
+    habit.category == ItemCategory.WORK ->
+      Icons.Outlined.WorkOutline to Color(0xFF3B82F6)
+    habit.category == ItemCategory.HEALTH ->
+      Icons.Outlined.FavoriteBorder to Color(0xFF10B981)
+    else ->
+      Icons.Outlined.CheckCircleOutline to DayFlowPrimary
+  }
 }
 
 @Composable
@@ -503,7 +652,7 @@ private fun HabitCard(
   title: String,
   subtitle: String,
   progress: Float,
-  iconType: HabitIconType,
+  icon: ImageVector,
   tintColor: Color,
   modifier: Modifier = Modifier,
   onClick: () -> Unit
@@ -532,33 +681,23 @@ private fun HabitCard(
             color = DayFlowSurfaceVariant,
             style = Stroke(width = strokeWidth)
           )
-          drawArc(
-            color = tintColor,
-            startAngle = -90f,
-            sweepAngle = progress * 360f,
-            useCenter = false,
-            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-          )
+          if (progress > 0f) {
+            drawArc(
+              color = tintColor,
+              startAngle = -90f,
+              sweepAngle = progress * 360f,
+              useCenter = false,
+              style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+            )
+          }
         }
 
-        when (iconType) {
-          HabitIconType.WATER -> {
-            Icon(
-              imageVector = Icons.Outlined.WaterDrop,
-              contentDescription = null,
-              tint = tintColor,
-              modifier = Modifier.size(20.dp)
-            )
-          }
-          HabitIconType.BOOK -> {
-            Icon(
-              imageVector = Icons.Outlined.MenuBook,
-              contentDescription = null,
-              tint = tintColor,
-              modifier = Modifier.size(20.dp)
-            )
-          }
-        }
+        Icon(
+          imageVector = icon,
+          contentDescription = null,
+          tint = tintColor,
+          modifier = Modifier.size(20.dp)
+        )
       }
 
       Spacer(modifier = Modifier.height(10.dp))
@@ -567,7 +706,10 @@ private fun HabitCard(
         text = title,
         style = MaterialTheme.typography.bodyMedium,
         color = DayFlowOnSurface,
-        fontWeight = FontWeight.Normal
+        fontWeight = FontWeight.Normal,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center
       )
 
       Spacer(modifier = Modifier.height(2.dp))
@@ -578,7 +720,8 @@ private fun HabitCard(
           fontSize = 11.sp,
           fontWeight = FontWeight.SemiBold
         ),
-        color = DayFlowOnSurfaceVariant
+        color = DayFlowOnSurfaceVariant,
+        textAlign = TextAlign.Center
       )
     }
   }

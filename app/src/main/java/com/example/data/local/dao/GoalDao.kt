@@ -15,6 +15,9 @@ interface GoalDao {
   @Query("SELECT * FROM goals ORDER BY createdAt DESC")
   fun getAllGoals(): Flow<List<GoalEntity>>
 
+  @Query("SELECT * FROM goals ORDER BY createdAt DESC")
+  suspend fun getAllGoalsList(): List<GoalEntity>
+
   @Query("SELECT * FROM goals WHERE isCompleted = 0 ORDER BY createdAt DESC")
   fun getActiveGoals(): Flow<List<GoalEntity>>
 
@@ -41,4 +44,7 @@ interface GoalDao {
 
   @Query("DELETE FROM goals WHERE id = :id")
   suspend fun deleteGoalById(id: String)
+
+  @Query("DELETE FROM goals")
+  suspend fun clearAllGoals()
 }

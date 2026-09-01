@@ -25,7 +25,9 @@ data class HabitCompletionEntity(
   @PrimaryKey
   val id: String,
   val habitId: String,
-  val completionDate: String, // e.g. "2026-10-14" or standard formatted date string
+  val completionDate: String, // e.g. "2026-09-01"
   val completedAt: Long = System.currentTimeMillis(),
+  val progressValue: Int = 1,
+  val isCompleted: Boolean = true,
   val notes: String? = null
 )

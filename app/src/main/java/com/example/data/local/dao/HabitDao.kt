@@ -15,6 +15,9 @@ interface HabitDao {
   @Query("SELECT * FROM habits ORDER BY createdAt ASC")
   fun getAllHabits(): Flow<List<HabitEntity>>
 
+  @Query("SELECT * FROM habits ORDER BY createdAt ASC")
+  suspend fun getAllHabitsList(): List<HabitEntity>
+
   @Query("SELECT * FROM habits WHERE isActive = 1 ORDER BY createdAt ASC")
   fun getActiveHabits(): Flow<List<HabitEntity>>
 
@@ -38,4 +41,7 @@ interface HabitDao {
 
   @Query("DELETE FROM habits WHERE id = :id")
   suspend fun deleteHabitById(id: String)
+
+  @Query("DELETE FROM habits")
+  suspend fun clearAllHabits()
 }

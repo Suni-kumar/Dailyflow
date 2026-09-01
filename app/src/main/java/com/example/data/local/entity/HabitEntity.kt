@@ -12,6 +12,8 @@ data class HabitEntity(
   val category: ItemCategory = ItemCategory.HEALTH,
   val scheduleFrequency: String = "DAILY",
   val targetPerWeek: Int = 7,
+  val dailyTarget: Int = 1,
+  val unit: String = "",
   val streakDays: Int = 0,
   val reminderTime: String? = null,
   val isActive: Boolean = true,

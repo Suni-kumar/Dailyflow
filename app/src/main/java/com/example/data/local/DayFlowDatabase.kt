@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
     GoalEntity::class,
     GoalProgressEntity::class
   ],
-  version = 1,
+  version = 3,
   exportSchema = false
 )
 @TypeConverters(DayFlowConverters::class)
@@ -54,6 +54,7 @@ abstract class DayFlowDatabase : RoomDatabase() {
           DayFlowDatabase::class.java,
           "dayflow_database"
         )
+          .fallbackToDestructiveMigration()
           .addCallback(DayFlowDatabaseCallback(scope))
           .build()
         INSTANCE = instance
@@ -79,14 +80,15 @@ abstract class DayFlowDatabase : RoomDatabase() {
       val habitDao = db.habitDao()
       val habitCompletionDao = db.habitCompletionDao()
       val goalDao = db.goalDao()
+      val todayKey = com.example.util.DateUtils.getTodayDateKey()
 
-      // Seed initial sample tasks
+      // Seed initial sample tasks for today
       val initialTasks = listOf(
         TaskEntity(
           id = "t1",
           title = "Morning Meditation",
           description = "Guided breathing and mindfulness",
-          dueDate = "Today",
+          dueDate = todayKey,
           startTime = "07:00 AM",
           endTime = "07:15 AM",
           category = ItemCategory.MINDFULNESS,
@@ -98,7 +100,7 @@ abstract class DayFlowDatabase : RoomDatabase() {
           id = "t2",
           title = "Deep Work Session",
           description = "High-concentration architecture planning and implementation",
-          dueDate = "Today",
+          dueDate = todayKey,
           startTime = "09:00 AM",
           endTime = "11:00 AM",
           category = ItemCategory.WORK,
@@ -110,7 +112,7 @@ abstract class DayFlowDatabase : RoomDatabase() {
           id = "t3",
           title = "Review Weekly Goals",
           description = "Evaluate quarterly key results and progress notes",
-          dueDate = "Today",
+          dueDate = todayKey,
           startTime = "02:00 PM",
           endTime = "02:30 PM",
           category = ItemCategory.PERSONAL,
@@ -121,7 +123,7 @@ abstract class DayFlowDatabase : RoomDatabase() {
       )
       taskDao.insertTasks(initialTasks)
 
-      // Seed initial sample habits
+      // Seed initial sample habits with measurable targets
       val initialHabits = listOf(
         HabitEntity(
           id = "h1",
@@ -129,6 +131,8 @@ abstract class DayFlowDatabase : RoomDatabase() {
           category = ItemCategory.HEALTH,
           scheduleFrequency = "DAILY",
           targetPerWeek = 7,
+          dailyTarget = 5,
+          unit = "L",
           streakDays = 14,
           reminderTime = "08:00 AM",
           isActive = true
@@ -139,6 +143,8 @@ abstract class DayFlowDatabase : RoomDatabase() {
           category = ItemCategory.LEARNING,
           scheduleFrequency = "DAILY",
           targetPerWeek = 7,
+          dailyTarget = 30,
+          unit = "min",
           streakDays = 8,
           reminderTime = "09:00 PM",
           isActive = true
@@ -146,12 +152,23 @@ abstract class DayFlowDatabase : RoomDatabase() {
       )
       habitDao.insertHabits(initialHabits)
 
-      // Record completion for reading habit today
+      // Record initial progress for today's habits
       habitCompletionDao.insertCompletion(
         HabitCompletionEntity(
           id = "hc_init_1",
+          habitId = "h1",
+          completionDate = todayKey,
+          progressValue = 3,
+          isCompleted = false
+        )
+      )
+      habitCompletionDao.insertCompletion(
+        HabitCompletionEntity(
+          id = "hc_init_2",
           habitId = "h2",
-          completionDate = "Today"
+          completionDate = todayKey,
+          progressValue = 30,
+          isCompleted = true
         )
       )
 
@@ -159,25 +176,39 @@ abstract class DayFlowDatabase : RoomDatabase() {
       val initialGoals = listOf(
         GoalEntity(
           id = "g1",
-          title = "Run 50km this month",
-          description = "Maintain cardiovascular health and stamina",
-          category = ItemCategory.FITNESS,
-          currentProgress = 32,
-          targetProgress = 50,
-          unit = "km",
-          deadline = "In 12 days",
+          title = "Learn Spanish Fluently",
+          description = "Practice daily vocabulary, grammar and speaking exercises",
+          goalType = "LONG TERM",
+          category = ItemCategory.LEARNING,
+          currentProgress = 35,
+          targetProgress = 100,
+          unit = "%",
+          deadline = "180d left",
           isCompleted = false
         ),
         GoalEntity(
           id = "g2",
-          title = "Complete Kotlin Course",
-          description = "Master Compose and modern reactive architecture",
-          category = ItemCategory.LEARNING,
-          currentProgress = 8,
-          targetProgress = 12,
-          unit = "modules",
-          deadline = "In 18 days",
+          title = "Launch Portfolio Website",
+          description = "Design and build personal developer showcase site",
+          goalType = "SHORT TERM",
+          category = ItemCategory.WORK,
+          currentProgress = 80,
+          targetProgress = 100,
+          unit = "%",
+          deadline = "14d left",
           isCompleted = false
+        ),
+        GoalEntity(
+          id = "g3",
+          title = "Read 12 Books",
+          description = "Non-fiction, biographies, and technical literature",
+          goalType = "SHORT TERM",
+          category = ItemCategory.LEARNING,
+          currentProgress = 100,
+          targetProgress = 100,
+          unit = "%",
+          deadline = "Dec 2023",
+          isCompleted = true
         )
       )
       goalDao.insertGoals(initialGoals)
