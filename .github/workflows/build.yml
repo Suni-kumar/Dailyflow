@@ -39,29 +39,39 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | sdkmanager --licenses || true
 
-      - name: Ensure Gradle Wrapper JAR
+      - name: Setup Gradle Environment & Secrets
         run: |
           mkdir -p gradle/wrapper
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ] || [ ! -s gradle/wrapper/gradle-wrapper.jar ]; then
             echo "Downloading gradle-wrapper.jar..."
             curl -sLo gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v9.3.1/gradle/wrapper/gradle-wrapper.jar || \
-            curl -sLo gradle/wrapper/gradle-wrapper.jar https://repo.gradle.org/artifactory/libs-releases/org/gradle/gradle-wrapper/9.3.1/gradle-wrapper-9.3.1.jar || \
-            gradle wrapper
+            curl -sLo gradle/wrapper/gradle-wrapper.jar https://repo.gradle.org/artifactory/libs-releases/org/gradle/gradle-wrapper/9.3.1/gradle-wrapper-9.3.1.jar || true
           fi
           chmod +x gradlew
 
-      - name: Restore Debug Keystore
-        run: |
+          # Prepare .env to prevent missing file issues with secrets plugin
+          if [ ! -f .env ]; then
+            if [ -f .env.example ]; then
+              cp .env.example .env
+            else
+              touch .env
+            fi
+          fi
+
+          # Decode debug keystore if present
           if [ -f debug.keystore.base64 ] && [ ! -f debug.keystore ]; then
-            echo "Decoding debug.keystore from base64..."
+            echo "Restoring debug.keystore from base64..."
             base64 -d debug.keystore.base64 > debug.keystore
           fi
 
       - name: Build Android APK
-        run: ./gradlew clean assembleDebug --stacktrace
+        run: ./gradlew assembleDebug --no-configuration-cache --no-daemon --stacktrace
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.configuration-cache=false"
 
       - name: Prepare APK Artifacts
         run: |
@@ -88,9 +98,9 @@ jobs:
             ## 📱 DayFlow Android Application
             Automated build from commit: ${{ github.sha }}
 
-            ### 🚀 Download & Installation
-            - Download the attached `.apk` file (`DayFlow-v${{ github.run_number }}.apk`) directly to your Android device.
-            - Open the downloaded file to install or update DayFlow.
+            ### 🚀 Direct APK Download
+            - **[DayFlow-v${{ github.run_number }}.apk](https://github.com/${{ github.repository }}/releases/download/v1.0.${{ github.run_number }}/DayFlow-v${{ github.run_number }}.apk)**: Direct installable APK for Android devices.
+            - **[DayFlow-debug.apk](https://github.com/${{ github.repository }}/releases/download/v1.0.${{ github.run_number }}/DayFlow-debug.apk)**: Standard debug build.
           files: |
             release-apks/DayFlow-v${{ github.run_number }}.apk
             release-apks/DayFlow-debug.apk
