@@ -2,9 +2,12 @@ package com.example.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.model.CustomCategory
+import com.example.ui.theme.DayFlowAccent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
 import org.json.JSONObject
 
 enum class AppThemeMode(val displayName: String) {
@@ -34,12 +37,23 @@ class UserPreferencesManager(context: Context) {
   private val _themeMode = MutableStateFlow(loadThemeMode())
   val themeMode: StateFlow<AppThemeMode> = _themeMode.asStateFlow()
 
+  private val _accentColor = MutableStateFlow(loadAccentColor())
+  val accentColor: StateFlow<DayFlowAccent> = _accentColor.asStateFlow()
+
   private val _notifications = MutableStateFlow(loadNotificationPreferences())
   val notifications: StateFlow<NotificationPreferences> = _notifications.asStateFlow()
+
+  private val _customCategories = MutableStateFlow(loadCustomCategories())
+  val customCategories: StateFlow<List<CustomCategory>> = _customCategories.asStateFlow()
 
   private fun loadThemeMode(): AppThemeMode {
     val saved = prefs.getString(KEY_THEME_MODE, AppThemeMode.SYSTEM.name)
     return AppThemeMode.fromName(saved)
+  }
+
+  private fun loadAccentColor(): DayFlowAccent {
+    val saved = prefs.getString(KEY_ACCENT_COLOR, DayFlowAccent.ROSEWOOD.id)
+    return DayFlowAccent.fromId(saved)
   }
 
   private fun loadNotificationPreferences(): NotificationPreferences {
@@ -51,9 +65,66 @@ class UserPreferencesManager(context: Context) {
     )
   }
 
+  private fun loadCustomCategories(): List<CustomCategory> {
+    val raw = prefs.getString(KEY_CUSTOM_CATEGORIES, "[]") ?: "[]"
+    val list = mutableListOf<CustomCategory>()
+    try {
+      val jsonArray = JSONArray(raw)
+      for (i in 0 until jsonArray.length()) {
+        val obj = jsonArray.getJSONObject(i)
+        list.add(
+          CustomCategory(
+            id = obj.getString("id"),
+            name = obj.getString("name"),
+            iconName = obj.optString("iconName", "category"),
+            colorHex = obj.optLong("colorHex", 0xFF3B82F6)
+          )
+        )
+      }
+    } catch (_: Exception) {
+      // Fallback
+    }
+    return list
+  }
+
+  fun saveCustomCategory(category: CustomCategory) {
+    val current = _customCategories.value.toMutableList()
+    val index = current.indexOfFirst { it.id == category.id || it.name.equals(category.name, ignoreCase = true) }
+    if (index >= 0) {
+      current[index] = category
+    } else {
+      current.add(category)
+    }
+    persistCustomCategories(current)
+  }
+
+  fun deleteCustomCategory(categoryId: String) {
+    val current = _customCategories.value.filter { it.id != categoryId }
+    persistCustomCategories(current)
+  }
+
+  private fun persistCustomCategories(categories: List<CustomCategory>) {
+    val jsonArray = JSONArray()
+    categories.forEach { cat ->
+      val obj = JSONObject()
+      obj.put("id", cat.id)
+      obj.put("name", cat.name)
+      obj.put("iconName", cat.iconName)
+      obj.put("colorHex", cat.colorHex)
+      jsonArray.put(obj)
+    }
+    prefs.edit().putString(KEY_CUSTOM_CATEGORIES, jsonArray.toString()).apply()
+    _customCategories.value = categories
+  }
+
   fun setThemeMode(mode: AppThemeMode) {
     prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
     _themeMode.value = mode
+  }
+
+  fun setAccentColor(accent: DayFlowAccent) {
+    prefs.edit().putString(KEY_ACCENT_COLOR, accent.id).apply()
+    _accentColor.value = accent
   }
 
   fun setNotificationsEnabled(enabled: Boolean) {
@@ -79,12 +150,24 @@ class UserPreferencesManager(context: Context) {
   fun exportToJson(): JSONObject {
     val json = JSONObject()
     json.put("themeMode", _themeMode.value.name)
+    json.put("accentColor", _accentColor.value.id)
     val notifObj = JSONObject()
     notifObj.put("isEnabled", _notifications.value.isEnabled)
     notifObj.put("morningBriefing", _notifications.value.morningBriefing)
     notifObj.put("eveningReview", _notifications.value.eveningReview)
     notifObj.put("habitReminders", _notifications.value.habitReminders)
     json.put("notifications", notifObj)
+
+    val catArray = JSONArray()
+    _customCategories.value.forEach { cat ->
+      val c = JSONObject()
+      c.put("id", cat.id)
+      c.put("name", cat.name)
+      c.put("iconName", cat.iconName)
+      c.put("colorHex", cat.colorHex)
+      catArray.put(c)
+    }
+    json.put("customCategories", catArray)
     return json
   }
 
@@ -92,6 +175,10 @@ class UserPreferencesManager(context: Context) {
     if (json.has("themeMode")) {
       val modeName = json.optString("themeMode")
       setThemeMode(AppThemeMode.fromName(modeName))
+    }
+    if (json.has("accentColor")) {
+      val accentId = json.optString("accentColor")
+      setAccentColor(DayFlowAccent.fromId(accentId))
     }
     if (json.has("notifications")) {
       val notifObj = json.optJSONObject("notifications")
@@ -106,13 +193,34 @@ class UserPreferencesManager(context: Context) {
         setHabitReminders(habits)
       }
     }
+    if (json.has("customCategories")) {
+      val catArray = json.optJSONArray("customCategories")
+      if (catArray != null) {
+        val list = mutableListOf<CustomCategory>()
+        for (i in 0 until catArray.length()) {
+          val obj = catArray.getJSONObject(i)
+          list.add(
+            CustomCategory(
+              id = obj.optString("id"),
+              name = obj.optString("name"),
+              iconName = obj.optString("iconName", "category"),
+              colorHex = obj.optLong("colorHex", 0xFF3B82F6)
+            )
+          )
+        }
+        persistCustomCategories(list)
+      }
+    }
   }
 
   companion object {
     private const val KEY_THEME_MODE = "key_theme_mode"
+    private const val KEY_ACCENT_COLOR = "key_accent_color"
     private const val KEY_NOTIFICATIONS_ENABLED = "key_notifications_enabled"
     private const val KEY_MORNING_BRIEFING = "key_morning_briefing"
     private const val KEY_EVENING_REVIEW = "key_evening_review"
     private const val KEY_HABIT_REMINDERS = "key_habit_reminders"
+    private const val KEY_CUSTOM_CATEGORIES = "key_custom_categories"
   }
 }
+

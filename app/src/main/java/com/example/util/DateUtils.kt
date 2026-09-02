@@ -301,4 +301,87 @@ object DateUtils {
       else -> "${remainingMinutes}m"
     }
   }
+
+  fun formatIso(date: Date): String {
+    return isoFormat.format(date)
+  }
+
+  fun getDateKeyOffset(baseDateKey: String, offsetDays: Int): String {
+    val parsed = parseDate(baseDateKey) ?: Date()
+    val cal = Calendar.getInstance()
+    cal.time = parsed
+    cal.add(Calendar.DAY_OF_MONTH, offsetDays)
+    return isoFormat.format(cal.time)
+  }
+
+  /**
+   * Dynamically calculates current streak and best streak from the set of active completed dates.
+   * A streak is counted on consecutive calendar days.
+   * If today is completed, current streak counts backwards from today.
+   * If today is not completed yet, current streak counts backwards from yesterday.
+   */
+  fun calculateStreak(completedDates: Set<String>, todayKey: String = getTodayDateKey()): Pair<Int, Int> {
+    if (completedDates.isEmpty()) return Pair(0, 0)
+    val cal = Calendar.getInstance()
+    val parsedToday = parseDate(todayKey) ?: Date()
+    cal.time = parsedToday
+
+    // 1. Calculate current streak
+    var currentStreak = 0
+    val isTodayCompleted = completedDates.contains(todayKey)
+    if (isTodayCompleted) {
+      currentStreak++
+      cal.add(Calendar.DAY_OF_MONTH, -1)
+      while (completedDates.contains(isoFormat.format(cal.time))) {
+        currentStreak++
+        cal.add(Calendar.DAY_OF_MONTH, -1)
+      }
+    } else {
+      // Check if yesterday was completed
+      cal.add(Calendar.DAY_OF_MONTH, -1)
+      val yesterdayKey = isoFormat.format(cal.time)
+      if (completedDates.contains(yesterdayKey)) {
+        currentStreak++
+        cal.add(Calendar.DAY_OF_MONTH, -1)
+        while (completedDates.contains(isoFormat.format(cal.time))) {
+          currentStreak++
+          cal.add(Calendar.DAY_OF_MONTH, -1)
+        }
+      }
+    }
+
+    // 2. Calculate all-time best streak across sorted unique completed dates
+    val sortedDates = completedDates.mapNotNull { parseDate(it) }.sorted()
+    var maxStreak = 0
+    var runningStreak = 0
+    var lastDateCal: Calendar? = null
+
+    for (date in sortedDates) {
+      val currentCal = Calendar.getInstance()
+      currentCal.time = date
+      currentCal.set(Calendar.HOUR_OF_DAY, 0)
+      currentCal.set(Calendar.MINUTE, 0)
+      currentCal.set(Calendar.SECOND, 0)
+      currentCal.set(Calendar.MILLISECOND, 0)
+
+      if (lastDateCal == null) {
+        runningStreak = 1
+      } else {
+        val diffMillis = currentCal.timeInMillis - lastDateCal.timeInMillis
+        val dayDiff = (diffMillis / (1000 * 60 * 60 * 24)).toInt()
+        if (dayDiff == 1) {
+          runningStreak++
+        } else if (dayDiff > 1) {
+          runningStreak = 1
+        }
+      }
+      if (runningStreak > maxStreak) {
+        maxStreak = runningStreak
+      }
+      lastDateCal = currentCal
+    }
+
+    val bestStreak = maxOf(maxStreak, currentStreak)
+    return Pair(currentStreak, bestStreak)
+  }
 }

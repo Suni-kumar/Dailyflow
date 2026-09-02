@@ -21,6 +21,9 @@ interface TaskDao {
   @Query("SELECT * FROM tasks WHERE dueDate = :date ORDER BY createdAt DESC")
   fun getTasksByDate(date: String): Flow<List<TaskEntity>>
 
+  @Query("SELECT * FROM tasks WHERE dueDate = :date ORDER BY createdAt DESC")
+  suspend fun getTasksByDateSync(date: String): List<TaskEntity>
+
   @Query("SELECT * FROM tasks WHERE isCompleted = :completed ORDER BY createdAt DESC")
   fun getTasksByCompletionStatus(completed: Boolean): Flow<List<TaskEntity>>
 

@@ -28,6 +28,7 @@ class MainActivity : ComponentActivity() {
     enableEdgeToEdge()
     setContent {
       val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+      val accentColor by viewModel.accentColor.collectAsStateWithLifecycle()
       val systemDark = isSystemInDarkTheme()
       val isDark = when (themeMode) {
         AppThemeMode.SYSTEM -> systemDark
@@ -37,7 +38,7 @@ class MainActivity : ComponentActivity() {
       
       var showSplash by rememberSaveable { androidx.compose.runtime.mutableStateOf(true) }
 
-      DayFlowTheme(darkTheme = isDark) {
+      DayFlowTheme(darkTheme = isDark, accent = accentColor) {
         androidx.compose.animation.Crossfade(
             targetState = showSplash,
             animationSpec = androidx.compose.animation.core.tween(500),

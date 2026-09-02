@@ -71,8 +71,6 @@ import com.example.ui.theme.DayFlowCardBorder
 import com.example.ui.theme.DayFlowOnPrimary
 import com.example.ui.theme.DayFlowOnSurface
 import com.example.ui.theme.DayFlowOnSurfaceVariant
-import com.example.ui.theme.DayFlowPrimary
-import com.example.ui.theme.DayFlowPrimaryContainer
 import com.example.ui.theme.DayFlowSecondary
 import com.example.ui.theme.DayFlowSecondaryContainer
 import com.example.ui.theme.DayFlowSurface
@@ -141,7 +139,7 @@ fun GoalsScreen(
           onClick = { showNewGoalSheet = true },
           shape = CircleShape,
           colors = ButtonDefaults.buttonColors(
-            containerColor = DayFlowPrimary,
+            containerColor = MaterialTheme.colorScheme.primary,
             contentColor = DayFlowOnPrimary
           ),
           contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -213,13 +211,13 @@ fun GoalsScreen(
             Surface(
               modifier = Modifier.size(44.dp),
               shape = CircleShape,
-              color = DayFlowPrimaryContainer.copy(alpha = 0.6f)
+              color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
             ) {
               Box(contentAlignment = Alignment.Center) {
                 Icon(
                   imageVector = Icons.Default.Flag,
                   contentDescription = null,
-                  tint = DayFlowPrimary,
+                  tint = MaterialTheme.colorScheme.primary,
                   modifier = Modifier.size(20.dp)
                 )
               }
@@ -376,9 +374,9 @@ private fun ActiveGoalCard(
   onClick: () -> Unit
 ) {
   val accentColor = if (goal.goalType == "SHORT TERM" || goal.category == ItemCategory.WORK) {
-    DayFlowSecondary
+    MaterialTheme.colorScheme.secondary
   } else {
-    DayFlowPrimary
+    MaterialTheme.colorScheme.primary
   }
 
   val displayDaysLeft = remember(goal.deadline) {
@@ -534,7 +532,7 @@ private fun CompletedGoalCard(
           Icon(
             imageVector = Icons.Filled.CheckCircle,
             contentDescription = "Completed Goal",
-            tint = DayFlowPrimary,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(22.dp)
           )
         }
@@ -599,7 +597,7 @@ private fun GoalDetailBottomSheet(
               fontWeight = FontWeight.SemiBold,
               letterSpacing = 1.sp
             ),
-            color = if (goal.goalType == "SHORT TERM") DayFlowSecondary else DayFlowPrimary
+            color = if (goal.goalType == "SHORT TERM") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
           )
           Text(
             text = goal.title,
@@ -670,7 +668,7 @@ private fun GoalDetailBottomSheet(
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold
               ),
-              color = DayFlowPrimary
+              color = MaterialTheme.colorScheme.primary
             )
           }
 
@@ -685,8 +683,8 @@ private fun GoalDetailBottomSheet(
             valueRange = 0f..100f,
             steps = 19, // 5% increments
             colors = SliderDefaults.colors(
-              thumbColor = DayFlowPrimary,
-              activeTrackColor = DayFlowPrimary,
+              thumbColor = MaterialTheme.colorScheme.primary,
+              activeTrackColor = MaterialTheme.colorScheme.primary,
               inactiveTrackColor = DayFlowSurfaceVariant
             ),
             modifier = Modifier.testTag("goal_progress_slider")
@@ -728,13 +726,37 @@ private fun GoalDetailBottomSheet(
 
       Spacer(modifier = Modifier.height(20.dp))
 
-      // Toggle Completed Status Button
+      // Save Progress Button
       Button(
-        onClick = onToggleCompletion,
+        onClick = {
+          onSetProgress(currentSliderProgress.toInt())
+          onDismiss()
+        },
         shape = CircleShape,
         colors = ButtonDefaults.buttonColors(
-          containerColor = if (goal.isCompleted) DayFlowSurfaceVariant else DayFlowPrimary,
-          contentColor = if (goal.isCompleted) DayFlowOnSurface else DayFlowOnPrimary
+          containerColor = MaterialTheme.colorScheme.primary,
+          contentColor = DayFlowOnPrimary
+        ),
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(48.dp)
+          .testTag("button_save_goal_progress")
+      ) {
+        Text(
+          text = "Save Progress (${currentSliderProgress.toInt()}%)",
+          fontWeight = FontWeight.Medium
+        )
+      }
+
+      Spacer(modifier = Modifier.height(10.dp))
+
+      // Toggle Completed Status Button
+      OutlinedButton(
+        onClick = onToggleCompletion,
+        shape = CircleShape,
+        border = BorderStroke(1.dp, if (goal.isCompleted) DayFlowSurfaceVariant else MaterialTheme.colorScheme.primary),
+        colors = ButtonDefaults.outlinedButtonColors(
+          contentColor = if (goal.isCompleted) DayFlowOnSurface else MaterialTheme.colorScheme.primary
         ),
         modifier = Modifier
           .fillMaxWidth()
@@ -751,7 +773,7 @@ private fun GoalDetailBottomSheet(
             modifier = Modifier.size(18.dp)
           )
           Text(
-            text = if (goal.isCompleted) "Reopen Goal" else "Mark as Completed",
+            text = if (goal.isCompleted) "Reopen Goal" else "Mark as 100% Completed",
             fontWeight = FontWeight.Medium
           )
         }
@@ -805,7 +827,7 @@ private fun NewGoalBottomSheet(
           .testTag("input_new_goal_title"),
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
-          focusedBorderColor = DayFlowPrimary,
+          focusedBorderColor = MaterialTheme.colorScheme.primary,
           unfocusedBorderColor = DayFlowCardBorder
         )
       )
@@ -820,7 +842,7 @@ private fun NewGoalBottomSheet(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
-          focusedBorderColor = DayFlowPrimary,
+          focusedBorderColor = MaterialTheme.colorScheme.primary,
           unfocusedBorderColor = DayFlowCardBorder
         )
       )
@@ -840,7 +862,7 @@ private fun NewGoalBottomSheet(
       ) {
         listOf("LONG TERM", "SHORT TERM").forEach { type ->
           val isSelected = tag == type
-          val activeColor = if (type == "SHORT TERM") DayFlowSecondary else DayFlowPrimary
+          val activeColor = if (type == "SHORT TERM") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
           Surface(
             shape = CircleShape,
             color = if (isSelected) activeColor else DayFlowSurfaceContainerLow,
@@ -877,7 +899,7 @@ private fun NewGoalBottomSheet(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
-          focusedBorderColor = DayFlowPrimary,
+          focusedBorderColor = MaterialTheme.colorScheme.primary,
           unfocusedBorderColor = DayFlowCardBorder
         )
       )
@@ -894,7 +916,7 @@ private fun NewGoalBottomSheet(
         enabled = title.isNotBlank(),
         shape = CircleShape,
         colors = ButtonDefaults.buttonColors(
-          containerColor = DayFlowPrimary,
+          containerColor = MaterialTheme.colorScheme.primary,
           contentColor = DayFlowOnPrimary
         ),
         modifier = Modifier
@@ -949,7 +971,7 @@ private fun EditGoalBottomSheet(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
-          focusedBorderColor = DayFlowPrimary,
+          focusedBorderColor = MaterialTheme.colorScheme.primary,
           unfocusedBorderColor = DayFlowCardBorder
         )
       )
@@ -963,7 +985,7 @@ private fun EditGoalBottomSheet(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
-          focusedBorderColor = DayFlowPrimary,
+          focusedBorderColor = MaterialTheme.colorScheme.primary,
           unfocusedBorderColor = DayFlowCardBorder
         )
       )
@@ -976,7 +998,7 @@ private fun EditGoalBottomSheet(
       ) {
         listOf("LONG TERM", "SHORT TERM").forEach { type ->
           val isSelected = tag == type
-          val activeColor = if (type == "SHORT TERM") DayFlowSecondary else DayFlowPrimary
+          val activeColor = if (type == "SHORT TERM") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
           Surface(
             shape = CircleShape,
             color = if (isSelected) activeColor else DayFlowSurfaceContainerLow,
@@ -1007,7 +1029,7 @@ private fun EditGoalBottomSheet(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
-          focusedBorderColor = DayFlowPrimary,
+          focusedBorderColor = MaterialTheme.colorScheme.primary,
           unfocusedBorderColor = DayFlowCardBorder
         )
       )
@@ -1030,7 +1052,7 @@ private fun EditGoalBottomSheet(
         enabled = title.isNotBlank(),
         shape = CircleShape,
         colors = ButtonDefaults.buttonColors(
-          containerColor = DayFlowPrimary,
+          containerColor = MaterialTheme.colorScheme.primary,
           contentColor = DayFlowOnPrimary
         ),
         modifier = Modifier

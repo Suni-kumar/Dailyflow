@@ -6,12 +6,14 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Leaderboard
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Leaderboard
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -62,6 +64,13 @@ sealed class DayFlowDestination(
     label = "Settings",
     selectedIcon = Icons.Filled.Settings,
     unselectedIcon = Icons.Outlined.Settings
+  )
+
+  object AccentColor : DayFlowDestination(
+    route = "accent_color",
+    label = "Accent Color",
+    selectedIcon = Icons.Filled.Palette,
+    unselectedIcon = Icons.Outlined.Palette
   )
 
   companion object {

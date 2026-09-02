@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,6 +36,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,7 +53,6 @@ import com.example.ui.theme.DayFlowOnPrimary
 import com.example.ui.theme.DayFlowOnSurface
 import com.example.ui.theme.DayFlowOnSurfaceVariant
 import com.example.ui.theme.DayFlowOutlineVariant
-import com.example.ui.theme.DayFlowPrimary
 import com.example.ui.theme.DayFlowSurfaceContainerLow
 import com.example.ui.theme.DayFlowSurfaceContainerLowest
 
@@ -70,6 +71,9 @@ fun HabitProgressSheet(
   var currentProgress by remember(habit.id, habit.currentProgress) {
     mutableIntStateOf(habit.currentProgress)
   }
+  var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+
+  val isTargetReached = currentProgress >= habit.dailyTarget
 
   ModalBottomSheet(
     onDismissRequest = onDismiss,
@@ -120,9 +124,9 @@ fun HabitProgressSheet(
         }
       }
 
-      Spacer(modifier = Modifier.height(28.dp))
+      Spacer(modifier = Modifier.height(24.dp))
 
-      // Stepper Section
+      // Stepper & Progress Section
       Surface(
         shape = RoundedCornerShape(16.dp),
         color = DayFlowSurfaceContainerLow,
@@ -135,15 +139,50 @@ fun HabitProgressSheet(
             .padding(20.dp),
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
-          Text(
-            text = "Today's Progress",
-            style = MaterialTheme.typography.labelSmall.copy(
-              fontSize = 11.sp,
-              fontWeight = FontWeight.SemiBold,
-              letterSpacing = 1.sp
-            ),
-            color = DayFlowOnSurfaceVariant
-          )
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text(
+              text = "TODAY'S PROGRESS",
+              style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.sp
+              ),
+              color = DayFlowOnSurfaceVariant
+            )
+
+            if (isTargetReached) {
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.padding(2.dp)
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                  Icon(
+                    imageVector = Icons.Outlined.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(12.dp)
+                  )
+                  Text(
+                    text = "Target Achieved",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                      fontSize = 10.sp,
+                      fontWeight = FontWeight.SemiBold
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                  )
+                }
+              }
+            }
+          }
 
           Spacer(modifier = Modifier.height(14.dp))
 
@@ -184,7 +223,7 @@ fun HabitProgressSheet(
                   fontSize = 40.sp,
                   fontWeight = FontWeight.Normal
                 ),
-                color = DayFlowPrimary
+                color = if (isTargetReached) MaterialTheme.colorScheme.primary else DayFlowOnSurface
               )
               Text(
                 text = "of ${habit.dailyTarget} ${habit.unit}".trim(),
@@ -227,30 +266,41 @@ fun HabitProgressSheet(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
       ) {
-        // Mark Complete (sets to target)
+        // Target Completion Action: only eligible when currentProgress >= dailyTarget
         OutlinedButton(
           onClick = {
-            currentProgress = habit.dailyTarget
-            onUpdateProgress(habit.id, habit.dailyTarget)
-            onDismiss()
+            if (isTargetReached) {
+              onUpdateProgress(habit.id, currentProgress)
+              onDismiss()
+            }
           },
+          enabled = isTargetReached,
           modifier = Modifier
             .weight(1f)
-            .height(48.dp),
+            .height(48.dp)
+            .testTag("habit_target_done_button"),
           shape = RoundedCornerShape(12.dp),
-          border = BorderStroke(1.dp, DayFlowOutlineVariant)
+          border = BorderStroke(
+            1.dp,
+            if (isTargetReached) MaterialTheme.colorScheme.primary else DayFlowOutlineVariant.copy(alpha = 0.5f)
+          )
         ) {
           Icon(
             imageVector = Icons.Default.Check,
             contentDescription = null,
-            tint = DayFlowPrimary,
+            tint = if (isTargetReached) MaterialTheme.colorScheme.primary else DayFlowOnSurfaceVariant.copy(alpha = 0.4f),
             modifier = Modifier.size(16.dp)
           )
           Spacer(modifier = Modifier.width(6.dp))
-          Text("Target Done", color = DayFlowOnSurface, fontSize = 14.sp)
+          Text(
+            text = if (isTargetReached) "Target Done" else "In Progress",
+            color = if (isTargetReached) DayFlowOnSurface else DayFlowOnSurfaceVariant.copy(alpha = 0.5f),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium
+          )
         }
 
-        // Save Progress
+        // Save Progress (saves exact current progress value)
         Button(
           onClick = {
             onUpdateProgress(habit.id, currentProgress)
@@ -258,14 +308,19 @@ fun HabitProgressSheet(
           },
           modifier = Modifier
             .weight(1f)
-            .height(48.dp),
+            .height(48.dp)
+            .testTag("habit_save_progress_button"),
           shape = RoundedCornerShape(12.dp),
           colors = ButtonDefaults.buttonColors(
-            containerColor = DayFlowPrimary,
+            containerColor = MaterialTheme.colorScheme.primary,
             contentColor = DayFlowOnPrimary
           )
         ) {
-          Text("Save Progress", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+          Text(
+            text = "Save Progress",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold
+          )
         }
       }
 
@@ -276,10 +331,10 @@ fun HabitProgressSheet(
         modifier = Modifier
           .fillMaxWidth()
           .clickable {
-            onDeleteHabit(habit.id)
-            onDismiss()
+            showDeleteConfirmDialog = true
           }
-          .padding(vertical = 8.dp),
+          .padding(vertical = 8.dp)
+          .testTag("delete_habit_button"),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
       ) {
@@ -300,4 +355,16 @@ fun HabitProgressSheet(
       Spacer(modifier = Modifier.height(8.dp))
     }
   }
+
+  // Delete Confirmation Dialog
+  DayFlowDeleteConfirmDialog(
+    isOpen = showDeleteConfirmDialog,
+    itemTitle = habit.title,
+    itemType = "Habit",
+    onConfirmDelete = {
+      onDeleteHabit(habit.id)
+      onDismiss()
+    },
+    onDismiss = { showDeleteConfirmDialog = false }
+  )
 }

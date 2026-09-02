@@ -73,14 +73,13 @@ import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
 import com.example.data.local.AppThemeMode
 import com.example.data.local.NotificationPreferences
+import com.example.ui.theme.DayFlowAccent
 import com.example.ui.theme.DayFlowBackground
 import com.example.ui.theme.DayFlowCardBorder
 import com.example.ui.theme.DayFlowOnPrimary
 import com.example.ui.theme.DayFlowOnSurface
 import com.example.ui.theme.DayFlowOnSurfaceVariant
 import com.example.ui.theme.DayFlowOutlineVariant
-import com.example.ui.theme.DayFlowPrimary
-import com.example.ui.theme.DayFlowPrimaryContainer
 import com.example.ui.theme.DayFlowSecondary
 import com.example.ui.theme.DayFlowSurface
 import com.example.ui.theme.DayFlowSurfaceContainerLow
@@ -96,6 +95,8 @@ import kotlinx.coroutines.withContext
 fun SettingsScreen(
   themeMode: AppThemeMode = AppThemeMode.SYSTEM,
   onThemeModeChange: (AppThemeMode) -> Unit = {},
+  accentColor: DayFlowAccent = DayFlowAccent.ROSEWOOD,
+  onOpenAccentColor: () -> Unit = {},
   notifications: NotificationPreferences = NotificationPreferences(),
   onNotificationsEnabledChange: (Boolean) -> Unit = {},
   onMorningBriefingChange: (Boolean) -> Unit = {},
@@ -237,6 +238,16 @@ fun SettingsScreen(
               onClick = { showThemeDialog = true },
               testTag = "settings_item_theme"
             )
+
+            SettingsRowDivider()
+
+            SettingsItemRow(
+              icon = Icons.Outlined.Palette,
+              title = "Accent Color",
+              value = accentColor.displayName,
+              onClick = onOpenAccentColor,
+              testTag = "settings_item_accent_color"
+            )
           }
         }
 
@@ -330,7 +341,7 @@ fun SettingsScreen(
                   showThemeDialog = false
                 },
                 colors = RadioButtonDefaults.colors(
-                  selectedColor = DayFlowPrimary,
+                  selectedColor = MaterialTheme.colorScheme.primary,
                   unselectedColor = DayFlowOnSurfaceVariant
                 )
               )
@@ -346,7 +357,7 @@ fun SettingsScreen(
       },
       confirmButton = {
         TextButton(onClick = { showThemeDialog = false }) {
-          Text("Cancel", color = DayFlowPrimary)
+          Text("Cancel", color = MaterialTheme.colorScheme.primary)
         }
       },
       containerColor = DayFlowSurface,
@@ -395,7 +406,7 @@ fun SettingsScreen(
             }
           },
           colors = ButtonDefaults.buttonColors(
-            containerColor = DayFlowPrimary,
+            containerColor = MaterialTheme.colorScheme.primary,
             contentColor = DayFlowOnPrimary
           )
         ) {
@@ -548,13 +559,13 @@ fun SettingsScreen(
           modifier = Modifier
             .size(64.dp)
             .clip(CircleShape)
-            .background(DayFlowPrimaryContainer),
+            .background(MaterialTheme.colorScheme.primaryContainer),
           contentAlignment = Alignment.Center
         ) {
           Icon(
             imageVector = Icons.Outlined.Info,
             contentDescription = null,
-            tint = DayFlowPrimary,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(32.dp)
           )
         }
@@ -630,7 +641,7 @@ private fun SettingsGroupSection(
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 1.2.sp
       ),
-      color = DayFlowPrimary,
+      color = MaterialTheme.colorScheme.primary,
       modifier = Modifier.padding(start = 6.dp, bottom = 8.dp)
     )
 
@@ -755,7 +766,7 @@ private fun NotificationToggleRow(
       enabled = enabled,
       colors = SwitchDefaults.colors(
         checkedThumbColor = DayFlowOnPrimary,
-        checkedTrackColor = DayFlowPrimary,
+        checkedTrackColor = MaterialTheme.colorScheme.primary,
         uncheckedThumbColor = DayFlowOnSurfaceVariant,
         uncheckedTrackColor = DayFlowSurfaceVariant
       )

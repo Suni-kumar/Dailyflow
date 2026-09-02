@@ -23,18 +23,30 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Flare
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.QueryBuilder
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,9 +73,6 @@ import com.example.ui.theme.DayFlowOnPrimary
 import com.example.ui.theme.DayFlowOnSurface
 import com.example.ui.theme.DayFlowOnSurfaceVariant
 import com.example.ui.theme.DayFlowOutlineVariant
-import com.example.ui.theme.DayFlowPrimary
-import com.example.ui.theme.DayFlowPrimaryContainer
-import com.example.ui.theme.DayFlowPrimaryFixed
 import com.example.ui.theme.DayFlowSecondary
 import com.example.ui.theme.DayFlowSecondaryContainer
 import com.example.ui.theme.DayFlowSecondaryFixed
@@ -75,14 +84,25 @@ import com.example.ui.theme.DayFlowTertiary
 import com.example.ui.theme.DayFlowTertiaryContainer
 import com.example.util.DateUtils
 
+private enum class StreakConfirmAction {
+  ADD_DAY,
+  REMOVE_DAY,
+  RESET
+}
+
 @Composable
 fun StatisticsScreen(
   statisticsData: StatisticsData = StatisticsData(),
   selectedRange: StatsTimeRange = StatsTimeRange.DAYS_7,
   onSelectRange: (StatsTimeRange) -> Unit = {},
+  onAddStreakDay: () -> Unit = {},
+  onRemoveStreakDay: () -> Unit = {},
+  onResetStreak: () -> Unit = {},
   summary: DailyProgressSummary = DailyProgressSummary(0, 0, 0, 0, 0, 0),
   tasks: List<TaskItem> = emptyList()
 ) {
+  var pendingStreakAction by remember { mutableStateOf<StreakConfirmAction?>(null) }
+
   LazyColumn(
     modifier = Modifier
       .fillMaxSize()
@@ -132,7 +152,7 @@ fun StatisticsScreen(
                 Box(
                   modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
-                    .background(if (isSelected) DayFlowPrimary else Color.Transparent)
+                    .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
                     .clickable { onSelectRange(range) }
                     .padding(horizontal = 10.dp, vertical = 6.dp)
                     .testTag("range_filter_${range.days}"),
@@ -177,13 +197,13 @@ fun StatisticsScreen(
               modifier = Modifier
                 .size(64.dp)
                 .clip(CircleShape)
-                .background(DayFlowPrimary.copy(alpha = 0.12f)),
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
               contentAlignment = Alignment.Center
             ) {
               Icon(
                 imageVector = Icons.Filled.TrendingUp,
                 contentDescription = null,
-                tint = DayFlowPrimary,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(32.dp)
               )
             }
@@ -224,7 +244,7 @@ fun StatisticsScreen(
             subtitle = "of ${statisticsData.tasksPlanned} planned",
             modifier = Modifier.weight(1f),
             icon = Icons.Filled.CheckCircle,
-            tint = DayFlowPrimary
+            tint = MaterialTheme.colorScheme.primary
           )
 
           // Metric 2: Completion Rate
@@ -234,7 +254,7 @@ fun StatisticsScreen(
             subtitle = if (statisticsData.tasksPlanned > 0) "success rate" else "No tasks",
             modifier = Modifier.weight(1f),
             icon = Icons.Filled.TrendingUp,
-            tint = DayFlowSecondary
+            tint = MaterialTheme.colorScheme.secondary
           )
 
           // Metric 3: Deep Focus Time
@@ -324,10 +344,12 @@ fun StatisticsScreen(
                 horizontalArrangement = if (selectedRange == StatsTimeRange.DAYS_7) Arrangement.SpaceBetween else Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.Bottom
               ) {
+                val primaryColor = MaterialTheme.colorScheme.primary
+                val secondaryColor = MaterialTheme.colorScheme.secondary
                 statisticsData.dailyStats.forEach { stat ->
                   val barColor = when {
-                    stat.isCurrentDay -> DayFlowPrimary
-                    stat.completedTasks > 0 -> DayFlowSecondaryFixed.copy(alpha = 0.85f)
+                    stat.isCurrentDay -> primaryColor
+                    stat.completedTasks > 0 -> secondaryColor.copy(alpha = 0.85f)
                     stat.totalTasks > 0 -> DayFlowSurfaceVariant.copy(alpha = 0.8f)
                     else -> DayFlowSurfaceVariant.copy(alpha = 0.35f)
                   }
@@ -347,7 +369,7 @@ fun StatisticsScreen(
                           fontSize = 10.sp,
                           fontWeight = FontWeight.Bold
                         ),
-                        color = if (stat.isCurrentDay) DayFlowPrimary else DayFlowSecondary,
+                        color = if (stat.isCurrentDay) primaryColor else secondaryColor,
                         modifier = Modifier.padding(bottom = 4.dp)
                       )
                     } else {
@@ -372,7 +394,7 @@ fun StatisticsScreen(
                         fontSize = 11.sp,
                         fontWeight = if (stat.isCurrentDay) FontWeight.Bold else FontWeight.Medium
                       ),
-                      color = if (stat.isCurrentDay) DayFlowPrimary else DayFlowOnSurfaceVariant
+                      color = if (stat.isCurrentDay) primaryColor else DayFlowOnSurfaceVariant
                     )
                   }
                 }
@@ -482,6 +504,83 @@ fun StatisticsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Sub-metrics row: Sessions, Avg, Longest
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              Surface(
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp),
+                color = DayFlowSurface,
+                border = BorderStroke(1.dp, DayFlowSurfaceVariant)
+              ) {
+                Column(
+                  modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                  Text(
+                    text = "${statisticsData.focusSessionsCount}",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                    color = DayFlowOnSurface
+                  )
+                  Text(
+                    text = "Sessions",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = DayFlowOnSurfaceVariant
+                  )
+                }
+              }
+
+              Surface(
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp),
+                color = DayFlowSurface,
+                border = BorderStroke(1.dp, DayFlowSurfaceVariant)
+              ) {
+                Column(
+                  modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                  Text(
+                    text = DateUtils.formatFocusMinutes(statisticsData.avgFocusMinutes),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                    color = DayFlowOnSurface
+                  )
+                  Text(
+                    text = "Avg Session",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = DayFlowOnSurfaceVariant
+                  )
+                }
+              }
+
+              Surface(
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp),
+                color = DayFlowSurface,
+                border = BorderStroke(1.dp, DayFlowSurfaceVariant)
+              ) {
+                Column(
+                  modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                  Text(
+                    text = DateUtils.formatFocusMinutes(statisticsData.longestFocusMinutes),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                    color = DayFlowOnSurface
+                  )
+                  Text(
+                    text = "Longest",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = DayFlowOnSurfaceVariant
+                  )
+                }
+              }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
             // Bottom text
             Text(
               text = if (statisticsData.totalFocusMinutes > 0) {
@@ -530,7 +629,7 @@ fun StatisticsScreen(
               Icon(
                 imageVector = Icons.Filled.Flare,
                 contentDescription = null,
-                tint = DayFlowPrimary,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
               )
             }
@@ -549,7 +648,7 @@ fun StatisticsScreen(
                   fontWeight = FontWeight.Light,
                   lineHeight = 60.sp
                 ),
-                color = DayFlowPrimary
+                color = MaterialTheme.colorScheme.primary
               )
               Spacer(modifier = Modifier.width(6.dp))
               Text(
@@ -558,7 +657,7 @@ fun StatisticsScreen(
                   fontSize = 18.sp,
                   fontWeight = FontWeight.Medium
                 ),
-                color = DayFlowPrimaryContainer,
+                color = MaterialTheme.colorScheme.primaryContainer,
                 modifier = Modifier.padding(top = 8.dp)
               )
             }
@@ -573,7 +672,7 @@ fun StatisticsScreen(
               )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Inner Bottom Row: Current Streak + Indicator Dots
             Surface(
@@ -597,12 +696,13 @@ fun StatisticsScreen(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                   if (statisticsData.recentStreakDays.isNotEmpty()) {
+                    val dotColor = MaterialTheme.colorScheme.primary
                     statisticsData.recentStreakDays.forEach { isCompletedDay ->
                       Box(
                         modifier = Modifier
                           .size(10.dp)
                           .clip(CircleShape)
-                          .background(if (isCompletedDay) DayFlowPrimary else DayFlowSurfaceVariant)
+                          .background(if (isCompletedDay) dotColor else DayFlowSurfaceVariant)
                       )
                     }
                   } else {
@@ -615,6 +715,71 @@ fun StatisticsScreen(
                       )
                     }
                   }
+                }
+              }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Manual Streak Adjustments (Pill buttons)
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              OutlinedButton(
+                onClick = { pendingStreakAction = StreakConfirmAction.ADD_DAY },
+                shape = CircleShape,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier
+                  .weight(1f)
+                  .testTag("stats_streak_add_day")
+              ) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                  Icon(imageVector = Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                  Text("+1 Day", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                }
+              }
+
+              OutlinedButton(
+                onClick = { pendingStreakAction = StreakConfirmAction.REMOVE_DAY },
+                enabled = statisticsData.currentStreak > 0,
+                shape = CircleShape,
+                border = BorderStroke(1.dp, DayFlowSurfaceVariant),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier
+                  .weight(1f)
+                  .testTag("stats_streak_remove_day")
+              ) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                  Icon(imageVector = Icons.Filled.Remove, contentDescription = null, modifier = Modifier.size(16.dp))
+                  Text("-1 Day", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                }
+              }
+
+              OutlinedButton(
+                onClick = { pendingStreakAction = StreakConfirmAction.RESET },
+                enabled = statisticsData.currentStreak > 0,
+                shape = CircleShape,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier
+                  .weight(1f)
+                  .testTag("stats_streak_reset")
+              ) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                  Icon(imageVector = Icons.Filled.Replay, contentDescription = null, modifier = Modifier.size(16.dp))
+                  Text("Reset", fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 }
               }
             }
@@ -814,13 +979,13 @@ fun StatisticsScreen(
                 modifier = Modifier
                   .size(36.dp)
                   .clip(CircleShape)
-                  .background(DayFlowPrimary.copy(alpha = 0.12f)),
+                  .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
               ) {
                 Icon(
                   imageVector = Icons.Filled.TrendingUp,
                   contentDescription = null,
-                  tint = DayFlowPrimary,
+                  tint = MaterialTheme.colorScheme.primary,
                   modifier = Modifier.size(18.dp)
                 )
               }
@@ -846,6 +1011,61 @@ fun StatisticsScreen(
     item {
       Spacer(modifier = Modifier.height(72.dp))
     }
+  }
+
+  if (pendingStreakAction != null) {
+    val action = pendingStreakAction!!
+    val title = when (action) {
+      StreakConfirmAction.ADD_DAY -> "Add Day to Streak"
+      StreakConfirmAction.REMOVE_DAY -> "Remove Day from Streak"
+      StreakConfirmAction.RESET -> "Reset Streak"
+    }
+    val message = when (action) {
+      StreakConfirmAction.ADD_DAY -> "Extend your consistency streak by 1 day?"
+      StreakConfirmAction.REMOVE_DAY -> "Reduce your consistency streak by 1 day?"
+      StreakConfirmAction.RESET -> "Reset your active streak back to 0 days? Your historical best streak will be preserved."
+    }
+    val confirmText = when (action) {
+      StreakConfirmAction.RESET -> "Reset"
+      else -> "Confirm"
+    }
+    val isDestructive = action == StreakConfirmAction.RESET || action == StreakConfirmAction.REMOVE_DAY
+
+    AlertDialog(
+      onDismissRequest = { pendingStreakAction = null },
+      title = {
+        Text(text = title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = DayFlowOnSurface)
+      },
+      text = {
+        Text(text = message, style = MaterialTheme.typography.bodyMedium, color = DayFlowOnSurfaceVariant)
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            when (action) {
+              StreakConfirmAction.ADD_DAY -> onAddStreakDay()
+              StreakConfirmAction.REMOVE_DAY -> onRemoveStreakDay()
+              StreakConfirmAction.RESET -> onResetStreak()
+            }
+            pendingStreakAction = null
+          },
+          colors = if (isDestructive) {
+            ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = DayFlowOnPrimary)
+          } else {
+            ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = DayFlowOnPrimary)
+          }
+        ) {
+          Text(confirmText)
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { pendingStreakAction = null }) {
+          Text("Cancel", color = DayFlowOnSurfaceVariant)
+        }
+      },
+      containerColor = DayFlowSurfaceContainerLowest,
+      shape = RoundedCornerShape(16.dp)
+    )
   }
 }
 

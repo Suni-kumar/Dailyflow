@@ -60,12 +60,9 @@ import com.example.model.ItemCategory
 import com.example.model.TaskItem
 import com.example.ui.theme.DayFlowBackground
 import com.example.ui.theme.DayFlowCardBorder
-import com.example.ui.theme.DayFlowOnPrimaryContainer
 import com.example.ui.theme.DayFlowOnSurface
 import com.example.ui.theme.DayFlowOnSurfaceVariant
 import com.example.ui.theme.DayFlowOutlineVariant
-import com.example.ui.theme.DayFlowPrimary
-import com.example.ui.theme.DayFlowPrimaryContainer
 import com.example.ui.theme.DayFlowSecondary
 import com.example.ui.theme.DayFlowSurface
 import com.example.ui.theme.DayFlowSurfaceContainerLow
@@ -170,7 +167,7 @@ private fun DateSelectorSection(
                 Modifier
                   .width(48.dp)
                   .clip(RoundedCornerShape(24.dp))
-                  .background(DayFlowPrimaryContainer)
+                  .background(MaterialTheme.colorScheme.primaryContainer)
                   .padding(vertical = 8.dp)
               } else {
                 Modifier
@@ -187,7 +184,7 @@ private fun DateSelectorSection(
               fontWeight = FontWeight.SemiBold,
               letterSpacing = 0.5.sp
             ),
-            color = if (isSelected) DayFlowOnPrimaryContainer else DayFlowOnSurfaceVariant
+            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else DayFlowOnSurfaceVariant
           )
 
           Spacer(modifier = Modifier.height(2.dp))
@@ -198,7 +195,7 @@ private fun DateSelectorSection(
               fontSize = 18.sp,
               fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
             ),
-            color = if (isSelected) DayFlowOnPrimaryContainer else DayFlowOnSurface
+            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else DayFlowOnSurface
           )
 
           if (day.isToday || day.hasIndicator) {
@@ -207,7 +204,7 @@ private fun DateSelectorSection(
               modifier = Modifier
                 .size(4.dp)
                 .clip(CircleShape)
-                .background(if (isSelected) DayFlowPrimary else DayFlowOutlineVariant)
+                .background(if (isSelected) MaterialTheme.colorScheme.primary else DayFlowOutlineVariant)
             )
           } else {
             Spacer(modifier = Modifier.height(7.dp))
@@ -281,6 +278,7 @@ private fun DailyProgressCard(summary: DailyProgressSummary) {
       }
 
       // Circular Progress Indicator
+      val primaryColor = MaterialTheme.colorScheme.primary
       Box(
         modifier = Modifier.size(60.dp),
         contentAlignment = Alignment.Center
@@ -293,7 +291,7 @@ private fun DailyProgressCard(summary: DailyProgressSummary) {
           )
           if (percent > 0) {
             drawArc(
-              color = DayFlowPrimary,
+              color = primaryColor,
               startAngle = -90f,
               sweepAngle = (percent / 100f) * 360f,
               useCenter = false,
@@ -352,7 +350,7 @@ private fun YourDaySection(
           Icon(
             imageVector = Icons.Default.Add,
             contentDescription = null,
-            tint = DayFlowPrimary,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(24.dp)
           )
           Spacer(modifier = Modifier.height(8.dp))
@@ -426,7 +424,7 @@ private fun StitchTaskCard(
             .width(4.dp)
             .height(64.dp)
             .clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
-            .background(DayFlowPrimary)
+            .background(MaterialTheme.colorScheme.primary)
         )
       }
 
@@ -445,10 +443,10 @@ private fun StitchTaskCard(
             .then(
               when {
                 isCompleted -> Modifier
-                  .background(DayFlowPrimaryContainer.copy(alpha = 0.5f))
-                  .border(1.dp, DayFlowPrimary, CircleShape)
+                  .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                  .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
                 isActive -> Modifier
-                  .border(2.dp, DayFlowPrimary, CircleShape)
+                  .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
                 else -> Modifier
                   .border(1.5.dp, DayFlowOutlineVariant, CircleShape)
               }
@@ -459,7 +457,7 @@ private fun StitchTaskCard(
             Icon(
               imageVector = Icons.Default.Check,
               contentDescription = "Completed",
-              tint = DayFlowPrimary,
+              tint = MaterialTheme.colorScheme.primary,
               modifier = Modifier.size(14.dp)
             )
           }
@@ -487,8 +485,14 @@ private fun StitchTaskCard(
             if (h > 0 && m > 0) "$h hr $m min" else if (h > 0) "$h hours" else "$m min"
           } else "15 min"
 
+          val timeRange = if (!task.endTime.isNullOrBlank()) {
+            "${task.time} - ${task.endTime}"
+          } else {
+            task.time
+          }
+
           Text(
-            text = "${task.time} • $durationStr • ${task.category.displayName}",
+            text = "$timeRange • $durationStr • ${task.category.displayName}",
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
             color = DayFlowOnSurfaceVariant.copy(alpha = if (isCompleted) 0.6f else 0.85f)
           )
@@ -498,7 +502,7 @@ private fun StitchTaskCard(
           Icon(
             imageVector = Icons.Outlined.PlayArrow,
             contentDescription = "Active Task",
-            tint = DayFlowPrimary,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(22.dp)
           )
         }
@@ -538,7 +542,7 @@ private fun HabitsSection(
         Icon(
           imageVector = Icons.Default.Add,
           contentDescription = "Add Habit",
-          tint = DayFlowPrimary,
+          tint = MaterialTheme.colorScheme.primary,
           modifier = Modifier.size(20.dp)
         )
       }
@@ -627,13 +631,16 @@ private fun HabitsSection(
   }
 }
 
+@Composable
 private fun resolveHabitVisuals(habit: HabitItem): Pair<ImageVector, Color> {
   val title = habit.title.lowercase()
+  val primary = MaterialTheme.colorScheme.primary
+  val secondary = MaterialTheme.colorScheme.secondary
   return when {
     title.contains("water") || title.contains("hydrat") || title.contains("drink") ->
-      Icons.Outlined.WaterDrop to DayFlowSecondary
+      Icons.Outlined.WaterDrop to secondary
     title.contains("read") || title.contains("book") || title.contains("study") ->
-      Icons.Outlined.MenuBook to DayFlowPrimary
+      Icons.Outlined.MenuBook to primary
     title.contains("run") || title.contains("gym") || title.contains("workout") || title.contains("fit") ->
       Icons.Outlined.FitnessCenter to Color(0xFFEF4444)
     title.contains("meditat") || title.contains("mind") || title.contains("breath") ->
@@ -643,7 +650,7 @@ private fun resolveHabitVisuals(habit: HabitItem): Pair<ImageVector, Color> {
     habit.category == ItemCategory.HEALTH ->
       Icons.Outlined.FavoriteBorder to Color(0xFF10B981)
     else ->
-      Icons.Outlined.CheckCircleOutline to DayFlowPrimary
+      Icons.Outlined.CheckCircleOutline to primary
   }
 }
 

@@ -45,6 +45,7 @@ import com.example.ui.components.AddTaskSheet
 import com.example.ui.components.DayFlowTopBar
 import com.example.ui.components.HabitProgressSheet
 import com.example.ui.navigation.DayFlowDestination
+import com.example.ui.screens.AccentColorScreen
 import com.example.ui.screens.AiCoachScreen
 import com.example.ui.screens.CalendarScreen
 import com.example.ui.screens.GoalsScreen
@@ -55,7 +56,6 @@ import com.example.ui.theme.DayFlowBackground
 import com.example.ui.theme.DayFlowCardBorder
 import com.example.ui.theme.DayFlowOnPrimary
 import com.example.ui.theme.DayFlowOnSurfaceVariant
-import com.example.ui.theme.DayFlowPrimary
 import com.example.ui.theme.DayFlowSurface
 import com.example.ui.viewmodel.DayFlowViewModel
 
@@ -90,9 +90,13 @@ fun DayFlowApp(
   val statisticsData by viewModel.statisticsData.collectAsStateWithLifecycle()
   val statsTimeRange by viewModel.statsTimeRange.collectAsStateWithLifecycle()
   val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+  val accentColor by viewModel.accentColor.collectAsStateWithLifecycle()
   val notifications by viewModel.notifications.collectAsStateWithLifecycle()
   val aiChatMessages by viewModel.aiChatMessages.collectAsStateWithLifecycle()
   val isAiThinking by viewModel.isAiThinking.collectAsStateWithLifecycle()
+  val customCategories by viewModel.customCategories.collectAsStateWithLifecycle()
+
+  val isSettingsOrAccent = currentRoute == DayFlowDestination.Settings.route || currentRoute == DayFlowDestination.AccentColor.route
 
   Scaffold(
     modifier = Modifier
@@ -100,7 +104,7 @@ fun DayFlowApp(
       .background(DayFlowBackground),
     containerColor = DayFlowBackground,
     topBar = {
-      if (currentRoute != DayFlowDestination.Settings.route) {
+      if (!isSettingsOrAccent) {
         DayFlowTopBar(
           title = "DayFlow",
           streakCount = summary.currentStreak,
@@ -128,7 +132,7 @@ fun DayFlowApp(
             }
             viewModel.openAddTaskSheet(targetDate)
           },
-          containerColor = DayFlowPrimary,
+          containerColor = MaterialTheme.colorScheme.primary,
           contentColor = DayFlowOnPrimary,
           shape = CircleShape,
           elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 3.dp),
@@ -145,7 +149,7 @@ fun DayFlowApp(
       }
     },
     bottomBar = {
-      if (currentRoute != DayFlowDestination.Settings.route) {
+      if (!isSettingsOrAccent) {
         StitchBottomNavBar(
           currentRoute = currentRoute,
           onNavigate = { route ->
@@ -223,6 +227,9 @@ fun DayFlowApp(
           statisticsData = statisticsData,
           selectedRange = statsTimeRange,
           onSelectRange = { viewModel.setStatsTimeRange(it) },
+          onAddStreakDay = { viewModel.addStreakDay() },
+          onRemoveStreakDay = { viewModel.removeStreakDay() },
+          onResetStreak = { viewModel.resetStreak() },
           summary = summary,
           tasks = allTasks
         )
@@ -243,6 +250,12 @@ fun DayFlowApp(
         SettingsScreen(
           themeMode = themeMode,
           onThemeModeChange = { viewModel.setThemeMode(it) },
+          accentColor = accentColor,
+          onOpenAccentColor = {
+            navController.navigate(DayFlowDestination.AccentColor.route) {
+              launchSingleTop = true
+            }
+          },
           notifications = notifications,
           onNotificationsEnabledChange = { viewModel.setNotificationsEnabled(it) },
           onMorningBriefingChange = { viewModel.setMorningBriefing(it) },
@@ -253,26 +266,38 @@ fun DayFlowApp(
           onNavigateBack = { navController.popBackStack() }
         )
       }
+
+      composable(DayFlowDestination.AccentColor.route) {
+        AccentColorScreen(
+          currentAccent = accentColor,
+          onSelectAccent = { viewModel.setAccentColor(it) },
+          onNavigateBack = { navController.popBackStack() }
+        )
+      }
     }
   }
 
   // Add Task Modal Bottom Sheet
   AddTaskSheet(
     isOpen = isAddTaskSheetOpen,
+    customCategories = customCategories,
     onDismiss = { viewModel.closeAddTaskSheet() },
     onAddTask = { title, desc, cat, prio, time, duration ->
       viewModel.addTask(title, desc, cat, prio, time, duration)
-    }
+    },
+    onCreateCustomCategory = { viewModel.saveCustomCategory(it) }
   )
 
   // Edit Task Modal Bottom Sheet
   AddTaskSheet(
     isOpen = editingTask != null,
     taskToEdit = editingTask,
+    customCategories = customCategories,
     onDismiss = { viewModel.closeEditTaskSheet() },
     onAddTask = { _, _, _, _, _, _ -> },
     onUpdateTask = { updatedTask -> viewModel.updateTask(updatedTask) },
-    onDeleteTask = { taskId -> viewModel.deleteTask(taskId) }
+    onDeleteTask = { taskId -> viewModel.deleteTask(taskId) },
+    onCreateCustomCategory = { viewModel.saveCustomCategory(it) }
   )
 
   // Add Habit Modal Bottom Sheet
@@ -359,7 +384,7 @@ private fun StitchNavItem(
     Icon(
       imageVector = if (isSelected) destination.selectedIcon else destination.unselectedIcon,
       contentDescription = destination.label,
-      tint = if (isSelected) DayFlowPrimary else DayFlowOnSurfaceVariant.copy(alpha = 0.55f),
+      tint = if (isSelected) MaterialTheme.colorScheme.primary else DayFlowOnSurfaceVariant.copy(alpha = 0.55f),
       modifier = Modifier.size(22.dp)
     )
     Spacer(modifier = Modifier.height(2.dp))
@@ -369,7 +394,7 @@ private fun StitchNavItem(
         fontSize = 11.sp,
         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
       ),
-      color = if (isSelected) DayFlowPrimary else DayFlowOnSurfaceVariant.copy(alpha = 0.7f)
+      color = if (isSelected) MaterialTheme.colorScheme.primary else DayFlowOnSurfaceVariant.copy(alpha = 0.7f)
     )
   }
 }

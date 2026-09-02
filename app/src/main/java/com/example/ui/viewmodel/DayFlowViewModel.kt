@@ -7,6 +7,7 @@ import com.example.data.DayFlowRepository
 import com.example.data.local.DayFlowDatabase
 import com.example.model.CalendarEventItem
 import com.example.model.CoachInsight
+import com.example.model.CustomCategory
 import com.example.model.DailyProgressSummary
 import com.example.model.GoalItem
 import com.example.model.HabitItem
@@ -137,12 +138,19 @@ class DayFlowViewModel(
   private val _statsTimeRange = MutableStateFlow(StatsTimeRange.DAYS_7)
   val statsTimeRange: StateFlow<StatsTimeRange> = _statsTimeRange.asStateFlow()
 
+  val customCategories: StateFlow<List<CustomCategory>> = repository.customCategories.stateIn(
+    scope = viewModelScope,
+    started = SharingStarted.WhileSubscribed(5000),
+    initialValue = emptyList()
+  )
+
   val statisticsData: StateFlow<StatisticsData> = combine(
     _statsTimeRange,
     allTasks,
-    allHabits
-  ) { range: StatsTimeRange, taskList: List<TaskItem>, habitList: List<HabitItem> ->
-    repository.calculateStatistics(range, taskList, habitList)
+    allHabits,
+    goals
+  ) { range: StatsTimeRange, taskList: List<TaskItem>, habitList: List<HabitItem>, goalList: List<GoalItem> ->
+    repository.calculateStatistics(range, taskList, habitList, goalList)
   }.stateIn(
     scope = viewModelScope,
     started = SharingStarted.WhileSubscribed(5000),
@@ -151,6 +159,18 @@ class DayFlowViewModel(
 
   fun setStatsTimeRange(range: StatsTimeRange) {
     _statsTimeRange.value = range
+  }
+
+  fun addStreakDay() {
+    repository.manualAddStreakDay()
+  }
+
+  fun removeStreakDay() {
+    repository.manualRemoveStreakDay()
+  }
+
+  fun resetStreak() {
+    repository.manualResetStreak()
   }
 
   fun selectTodayDate(dateKey: String) {
@@ -167,7 +187,8 @@ class DayFlowViewModel(
     category: ItemCategory,
     priority: TaskPriority,
     time: String,
-    estimatedMinutes: Int
+    estimatedMinutes: Int,
+    endTime: String? = null
   ) {
     if (title.isBlank()) return
     val targetDate = _activeTaskTargetDate.value ?: _selectedTodayDate.value
@@ -178,6 +199,7 @@ class DayFlowViewModel(
       category = category,
       priority = priority,
       time = if (time.isBlank()) "09:00 AM" else time,
+      endTime = endTime,
       dueDate = targetDate,
       isCompleted = false,
       estimatedMinutes = estimatedMinutes
@@ -240,6 +262,14 @@ class DayFlowViewModel(
   fun deleteHabit(habitId: String) {
     repository.deleteHabit(habitId)
     _habitForProgressSheet.value = null
+  }
+
+  fun saveCustomCategory(category: CustomCategory) {
+    repository.saveCustomCategory(category)
+  }
+
+  fun deleteCustomCategory(categoryId: String) {
+    repository.deleteCustomCategory(categoryId)
   }
 
   fun openAddHabitSheet() {
@@ -351,11 +381,18 @@ class DayFlowViewModel(
   val themeMode: StateFlow<com.example.data.local.AppThemeMode> = preferencesManager?.themeMode
     ?: MutableStateFlow(com.example.data.local.AppThemeMode.SYSTEM).asStateFlow()
 
+  val accentColor: StateFlow<com.example.ui.theme.DayFlowAccent> = preferencesManager?.accentColor
+    ?: MutableStateFlow(com.example.ui.theme.DayFlowAccent.ROSEWOOD).asStateFlow()
+
   val notifications: StateFlow<com.example.data.local.NotificationPreferences> = preferencesManager?.notifications
     ?: MutableStateFlow(com.example.data.local.NotificationPreferences()).asStateFlow()
 
   fun setThemeMode(mode: com.example.data.local.AppThemeMode) {
     preferencesManager?.setThemeMode(mode)
+  }
+
+  fun setAccentColor(accent: com.example.ui.theme.DayFlowAccent) {
+    preferencesManager?.setAccentColor(accent)
   }
 
   fun setNotificationsEnabled(enabled: Boolean) {

@@ -48,13 +48,10 @@ import com.example.model.ItemCategory
 import com.example.model.TaskItem
 import com.example.ui.theme.DayFlowBackground
 import com.example.ui.theme.DayFlowCardBorder
-import com.example.ui.theme.DayFlowOnPrimaryContainer
 import com.example.ui.theme.DayFlowOnSecondaryContainer
 import com.example.ui.theme.DayFlowOnSurface
 import com.example.ui.theme.DayFlowOnSurfaceVariant
 import com.example.ui.theme.DayFlowOutlineVariant
-import com.example.ui.theme.DayFlowPrimary
-import com.example.ui.theme.DayFlowPrimaryContainer
 import com.example.ui.theme.DayFlowSecondaryContainer
 import com.example.ui.theme.DayFlowSurfaceContainerLow
 import com.example.ui.theme.DayFlowSurfaceContainerLowest
@@ -278,13 +275,13 @@ fun CalendarScreen(
             Surface(
               modifier = Modifier.size(44.dp),
               shape = CircleShape,
-              color = DayFlowPrimaryContainer.copy(alpha = 0.6f)
+              color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
             ) {
               Box(contentAlignment = Alignment.Center) {
                 Icon(
                   imageVector = Icons.Default.Add,
                   contentDescription = null,
-                  tint = DayFlowPrimary,
+                  tint = MaterialTheme.colorScheme.primary,
                   modifier = Modifier.size(20.dp)
                 )
               }
@@ -339,7 +336,7 @@ private fun CalendarDayCell(
       .clip(CircleShape)
       .background(
         when {
-          cell.isSelected -> DayFlowPrimaryContainer
+          cell.isSelected -> MaterialTheme.colorScheme.primaryContainer
           else -> Color.Transparent
         }
       )
@@ -358,21 +355,22 @@ private fun CalendarDayCell(
           fontWeight = if (cell.isSelected) FontWeight.SemiBold else FontWeight.Normal
         ),
         color = when {
-          cell.isSelected -> DayFlowOnPrimaryContainer
+          cell.isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
           !cell.isCurrentMonth -> DayFlowOnSurfaceVariant.copy(alpha = 0.35f)
-          cell.isToday -> DayFlowPrimary
+          cell.isToday -> MaterialTheme.colorScheme.primary
           else -> DayFlowOnSurface
         }
       )
 
       if (cell.hasEvent) {
+        val primaryColor = MaterialTheme.colorScheme.primary
         Box(
           modifier = Modifier
             .padding(top = 2.dp)
             .size(4.dp)
             .clip(CircleShape)
             .background(
-              if (cell.isSelected) DayFlowPrimary else DayFlowPrimary.copy(alpha = 0.7f)
+              if (cell.isSelected) primaryColor else primaryColor.copy(alpha = 0.7f)
             )
         )
       } else {
@@ -418,7 +416,7 @@ private fun CalendarTaskCard(
           Icon(
             imageVector = Icons.Filled.CheckCircle,
             contentDescription = "Completed",
-            tint = DayFlowPrimary,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(24.dp)
           )
         } else {
@@ -454,8 +452,14 @@ private fun CalendarTaskCard(
 
           Spacer(modifier = Modifier.width(8.dp))
 
+          val timeDisplay = if (!task.endTime.isNullOrBlank()) {
+            "${task.time} - ${task.endTime}"
+          } else {
+            task.time
+          }
+
           Text(
-            text = task.time,
+            text = timeDisplay,
             style = MaterialTheme.typography.bodySmall.copy(
               fontSize = 14.sp,
               fontWeight = FontWeight.Normal

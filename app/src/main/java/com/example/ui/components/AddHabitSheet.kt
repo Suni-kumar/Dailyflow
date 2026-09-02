@@ -54,12 +54,9 @@ import com.example.model.ItemCategory
 import com.example.ui.theme.DayFlowBackground
 import com.example.ui.theme.DayFlowCardBorder
 import com.example.ui.theme.DayFlowOnPrimary
-import com.example.ui.theme.DayFlowOnPrimaryContainer
 import com.example.ui.theme.DayFlowOnSurface
 import com.example.ui.theme.DayFlowOnSurfaceVariant
 import com.example.ui.theme.DayFlowOutlineVariant
-import com.example.ui.theme.DayFlowPrimary
-import com.example.ui.theme.DayFlowPrimaryContainer
 import com.example.ui.theme.DayFlowSurfaceContainerLow
 import com.example.ui.theme.DayFlowSurfaceContainerLowest
 
@@ -114,7 +111,7 @@ fun AddHabitSheet(
             fontSize = 24.sp,
             fontWeight = FontWeight.Normal
           ),
-          color = DayFlowPrimary,
+          color = MaterialTheme.colorScheme.primary,
           modifier = Modifier.testTag("add_habit_header")
         )
 
@@ -156,7 +153,7 @@ fun AddHabitSheet(
             color = DayFlowOnSurface
           ),
           singleLine = true,
-          cursorBrush = SolidColor(DayFlowPrimary),
+          cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
           keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
           modifier = Modifier
             .fillMaxWidth()
@@ -191,13 +188,13 @@ fun AddHabitSheet(
               .clickable { selectedCategory = cat }
               .testTag("habit_cat_${cat.name.lowercase()}"),
             shape = RoundedCornerShape(20.dp),
-            color = if (isSelected) DayFlowPrimaryContainer else Color.Transparent,
-            border = BorderStroke(1.dp, if (isSelected) DayFlowPrimary else DayFlowOutlineVariant)
+            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+            border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else DayFlowOutlineVariant)
           ) {
             Text(
               text = cat.displayName,
               style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-              color = if (isSelected) DayFlowOnPrimaryContainer else DayFlowOnSurfaceVariant,
+              color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else DayFlowOnSurfaceVariant,
               fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
               modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
             )
@@ -219,13 +216,13 @@ fun AddHabitSheet(
               .clickable { selectedCategory = cat }
               .testTag("habit_cat_${cat.name.lowercase()}"),
             shape = RoundedCornerShape(20.dp),
-            color = if (isSelected) DayFlowPrimaryContainer else Color.Transparent,
-            border = BorderStroke(1.dp, if (isSelected) DayFlowPrimary else DayFlowOutlineVariant)
+            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+            border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else DayFlowOutlineVariant)
           ) {
             Text(
               text = cat.displayName,
               style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-              color = if (isSelected) DayFlowOnPrimaryContainer else DayFlowOnSurfaceVariant,
+              color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else DayFlowOnSurfaceVariant,
               fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
               modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
             )
@@ -265,13 +262,13 @@ fun AddHabitSheet(
               }
               .testTag("unit_chip_$unit"),
             shape = RoundedCornerShape(16.dp),
-            color = if (isSelected) DayFlowPrimaryContainer else Color.Transparent,
-            border = BorderStroke(1.dp, if (isSelected) DayFlowPrimary else DayFlowOutlineVariant)
+            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+            border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else DayFlowOutlineVariant)
           ) {
             Text(
               text = unit,
               style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-              color = if (isSelected) DayFlowOnPrimaryContainer else DayFlowOnSurfaceVariant,
+              color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else DayFlowOnSurfaceVariant,
               modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
             )
           }
@@ -326,7 +323,7 @@ fun AddHabitSheet(
             Text(
               text = "$dailyTarget ${if (selectedUnitType != "Count") selectedUnitType else ""}".trim(),
               style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-              color = DayFlowPrimary,
+              color = MaterialTheme.colorScheme.primary,
               modifier = Modifier.testTag("target_value_display")
             )
 
@@ -376,9 +373,9 @@ fun AddHabitSheet(
           .testTag("submit_habit_button"),
         shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.buttonColors(
-          containerColor = DayFlowPrimary,
+          containerColor = MaterialTheme.colorScheme.primary,
           contentColor = DayFlowOnPrimary,
-          disabledContainerColor = DayFlowPrimary.copy(alpha = 0.5f),
+          disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
           disabledContentColor = DayFlowOnPrimary.copy(alpha = 0.7f)
         )
       ) {

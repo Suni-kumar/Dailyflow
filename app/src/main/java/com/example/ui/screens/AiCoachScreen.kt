@@ -64,9 +64,6 @@ import com.example.ui.theme.DayFlowOnPrimary
 import com.example.ui.theme.DayFlowOnSurface
 import com.example.ui.theme.DayFlowOnSurfaceVariant
 import com.example.ui.theme.DayFlowOutlineVariant
-import com.example.ui.theme.DayFlowPrimary
-import com.example.ui.theme.DayFlowPrimaryContainer
-import com.example.ui.theme.DayFlowPrimaryFixed
 import com.example.ui.theme.DayFlowSecondary
 import com.example.ui.theme.DayFlowSecondaryFixed
 import com.example.ui.theme.DayFlowSurface
@@ -163,7 +160,7 @@ fun AiCoachScreen(
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 1.2.sp
           ),
-          color = DayFlowPrimary,
+          color = MaterialTheme.colorScheme.primary,
           modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp)
         )
       }
@@ -178,7 +175,7 @@ fun AiCoachScreen(
             title = "Daily Briefing",
             subtitle = "Plan morning flow",
             icon = Icons.Filled.SelfImprovement,
-            tint = DayFlowPrimary,
+            tint = MaterialTheme.colorScheme.primary,
             onClick = { onTriggerAction(CoachActionType.DAILY_BRIEFING) },
             testTag = "coach_action_briefing"
           )
@@ -188,7 +185,7 @@ fun AiCoachScreen(
             title = "Day Review",
             subtitle = "Evening reflection",
             icon = Icons.Filled.Bedtime,
-            tint = DayFlowSecondary,
+            tint = MaterialTheme.colorScheme.secondary,
             onClick = { onTriggerAction(CoachActionType.DAY_REVIEW) },
             testTag = "coach_action_review"
           )
@@ -251,7 +248,7 @@ fun AiCoachScreen(
                       InsightType.ADVICE -> Icons.Filled.AutoAwesome
                     },
                     contentDescription = null,
-                    tint = DayFlowPrimary,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
                   )
                   Text(
@@ -261,7 +258,7 @@ fun AiCoachScreen(
                       fontWeight = FontWeight.SemiBold,
                       letterSpacing = 1.sp
                     ),
-                    color = DayFlowPrimary
+                    color = MaterialTheme.colorScheme.primary
                   )
                 }
 
@@ -308,7 +305,7 @@ fun AiCoachScreen(
               fontWeight = FontWeight.SemiBold,
               letterSpacing = 1.2.sp
             ),
-            color = DayFlowPrimary,
+            color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp)
           )
         }
@@ -316,7 +313,7 @@ fun AiCoachScreen(
         items(chatMessages) { (text, isUser) ->
           Surface(
             shape = RoundedCornerShape(14.dp),
-            color = if (isUser) DayFlowPrimaryContainer else DayFlowSurfaceContainerLow,
+            color = if (isUser) MaterialTheme.colorScheme.primaryContainer else DayFlowSurfaceContainerLow,
             border = BorderStroke(1.dp, DayFlowCardBorder),
             modifier = Modifier
               .fillMaxWidth()
@@ -347,7 +344,7 @@ fun AiCoachScreen(
           ) {
             CircularProgressIndicator(
               modifier = Modifier.size(20.dp),
-              color = DayFlowPrimary,
+              color = MaterialTheme.colorScheme.primary,
               strokeWidth = 2.dp
             )
             Spacer(modifier = Modifier.width(10.dp))
@@ -408,6 +405,7 @@ fun AiCoachScreen(
                 color = DayFlowOnSurfaceVariant.copy(alpha = 0.6f)
               )
             }
+            val primaryColor = MaterialTheme.colorScheme.primary
             BasicTextField(
               value = userInput,
               onValueChange = { userInput = it },
@@ -415,7 +413,7 @@ fun AiCoachScreen(
                 fontSize = 14.sp,
                 color = DayFlowOnSurface
               ),
-              cursorBrush = SolidColor(DayFlowPrimary),
+              cursorBrush = SolidColor(primaryColor),
               modifier = Modifier
                 .fillMaxWidth()
                 .testTag("ai_prompt_input"),
@@ -424,9 +422,10 @@ fun AiCoachScreen(
           }
 
           // Send Button
+          val primaryColor = MaterialTheme.colorScheme.primary
           Surface(
             shape = CircleShape,
-            color = if (userInput.isNotBlank()) DayFlowPrimary else DayFlowPrimary.copy(alpha = 0.5f),
+            color = if (userInput.isNotBlank()) primaryColor else primaryColor.copy(alpha = 0.5f),
             modifier = Modifier
               .size(36.dp)
               .clickable(enabled = userInput.isNotBlank() && !isThinking) {
