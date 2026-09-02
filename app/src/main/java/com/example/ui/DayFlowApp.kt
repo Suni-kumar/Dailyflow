@@ -75,6 +75,7 @@ fun DayFlowApp(
   val isAddTaskSheetOpen by viewModel.isAddTaskSheetOpen.collectAsStateWithLifecycle()
   val editingTask by viewModel.editingTask.collectAsStateWithLifecycle()
   val isAddHabitSheetOpen by viewModel.isAddHabitSheetOpen.collectAsStateWithLifecycle()
+  val editingHabit by viewModel.editingHabit.collectAsStateWithLifecycle()
   val habitForProgressSheet by viewModel.habitForProgressSheet.collectAsStateWithLifecycle()
   val customCategories by viewModel.customCategories.collectAsStateWithLifecycle()
 
@@ -240,6 +241,7 @@ fun DayFlowApp(
         val aiChatSessions by viewModel.aiChatSessions.collectAsStateWithLifecycle()
         val isAiThinking by viewModel.isAiThinking.collectAsStateWithLifecycle()
         val geminiApiKey by viewModel.geminiApiKey.collectAsStateWithLifecycle()
+        val geminiConnectionVerified by viewModel.geminiConnectionVerified.collectAsStateWithLifecycle()
 
         AiCoachScreen(
           insights = coachInsights,
@@ -247,7 +249,8 @@ fun DayFlowApp(
           chatMessages = aiChatMessages,
           chatSessions = aiChatSessions,
           isThinking = isAiThinking,
-          isGeminiConnected = geminiApiKey.isNotBlank(),
+          isGeminiConfigured = geminiApiKey.isNotBlank(),
+          isGeminiConnected = geminiApiKey.isNotBlank() && geminiConnectionVerified,
           onSendPrompt = { viewModel.sendCoachPrompt(it) },
           onTriggerAction = { viewModel.triggerCoachAction(it) },
           onStopGeneration = { viewModel.stopAiGeneration() },
@@ -270,6 +273,7 @@ fun DayFlowApp(
         val accentColor by viewModel.accentColor.collectAsStateWithLifecycle()
         val notifications by viewModel.notifications.collectAsStateWithLifecycle()
         val geminiApiKey by viewModel.geminiApiKey.collectAsStateWithLifecycle()
+        val geminiConnectionVerified by viewModel.geminiConnectionVerified.collectAsStateWithLifecycle()
         val aiLanguage by viewModel.aiLanguage.collectAsStateWithLifecycle()
         val isTestingConnection by viewModel.isTestingConnection.collectAsStateWithLifecycle()
         val testConnectionResult by viewModel.testConnectionResult.collectAsStateWithLifecycle()
@@ -290,6 +294,7 @@ fun DayFlowApp(
           onEveningReviewChange = { viewModel.setEveningReview(it) },
           onHabitRemindersChange = { viewModel.setHabitReminders(it) },
           geminiApiKey = geminiApiKey,
+          isGeminiVerified = geminiConnectionVerified,
           onSaveGeminiApiKey = { viewModel.setGeminiApiKey(it) },
           onClearGeminiApiKey = { viewModel.clearGeminiApiKey() },
           aiLanguage = aiLanguage,
@@ -343,13 +348,28 @@ fun DayFlowApp(
     onCreateCustomCategory = { viewModel.saveCustomCategory(it) }
   )
 
-  // Add Habit Modal Bottom Sheet
+  // Add / Edit Habit Modal Bottom Sheet
   AddHabitSheet(
-    isOpen = isAddHabitSheetOpen,
-    onDismiss = { viewModel.closeAddHabitSheet() },
+    isOpen = isAddHabitSheetOpen || editingHabit != null,
+    onDismiss = {
+      if (editingHabit != null) {
+        viewModel.closeEditHabitSheet()
+      } else {
+        viewModel.closeAddHabitSheet()
+      }
+    },
     onAddHabit = { title, category, dailyTarget, unit, reminderTime ->
       viewModel.addHabit(title, category, dailyTarget, unit, reminderTime)
-    }
+    },
+    habitToEdit = editingHabit,
+    onUpdateHabit = { updatedHabit ->
+      viewModel.updateHabit(updatedHabit)
+    },
+    onDeleteHabit = { habitId ->
+      viewModel.deleteHabit(habitId)
+    },
+    customCategories = customCategories,
+    onCreateCustomCategory = { viewModel.saveCustomCategory(it) }
   )
 
   // Habit Progress Modal Bottom Sheet
@@ -362,6 +382,9 @@ fun DayFlowApp(
     },
     onDeleteHabit = { habitId ->
       viewModel.deleteHabit(habitId)
+    },
+    onEditHabit = { habit ->
+      viewModel.openEditHabitSheet(habit)
     }
   )
 }

@@ -101,6 +101,7 @@ fun AiCoachScreen(
   chatMessages: List<AiChatMessage> = emptyList(),
   chatSessions: List<com.example.model.AiChatSession> = emptyList(),
   isThinking: Boolean = false,
+  isGeminiConfigured: Boolean = false,
   isGeminiConnected: Boolean = false,
   onSendPrompt: (String) -> Unit = {},
   onTriggerAction: (CoachActionType) -> Unit = {},
@@ -146,10 +147,21 @@ fun AiCoachScreen(
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
           // AI Mode Badge
+          val badgeColor = when {
+            isGeminiConnected -> DayFlowSecondary
+            isGeminiConfigured -> MaterialTheme.colorScheme.tertiary
+            else -> MaterialTheme.colorScheme.primary
+          }
+          val badgeText = when {
+            isGeminiConnected -> "GEMINI 3.5 FLASH ACTIVE"
+            isGeminiConfigured -> "GEMINI CONFIGURED (UNVERIFIED)"
+            else -> "MINDFUL LOCAL COACH"
+          }
+
           Surface(
             shape = CircleShape,
-            color = if (isGeminiConnected) DayFlowSecondary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-            border = BorderStroke(1.dp, if (isGeminiConnected) DayFlowSecondary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+            color = badgeColor.copy(alpha = 0.12f),
+            border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.3f)),
             modifier = Modifier
               .clickable { onOpenSettings() }
               .testTag("ai_coach_status_badge")
@@ -162,17 +174,17 @@ fun AiCoachScreen(
               Icon(
                 imageVector = Icons.Filled.AutoAwesome,
                 contentDescription = null,
-                tint = if (isGeminiConnected) DayFlowSecondary else MaterialTheme.colorScheme.primary,
+                tint = badgeColor,
                 modifier = Modifier.size(14.dp)
               )
               Text(
-                text = if (isGeminiConnected) "GEMINI COACH ACTIVE" else "MINDFUL LOCAL COACH",
+                text = badgeText,
                 style = MaterialTheme.typography.labelSmall.copy(
                   fontSize = 11.sp,
                   fontWeight = FontWeight.SemiBold,
                   letterSpacing = 1.1.sp
                 ),
-                color = if (isGeminiConnected) DayFlowSecondary else MaterialTheme.colorScheme.primary
+                color = badgeColor
               )
             }
           }

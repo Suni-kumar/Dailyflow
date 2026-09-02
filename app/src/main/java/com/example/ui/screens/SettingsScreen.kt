@@ -135,6 +135,7 @@ fun SettingsScreen(
   onEveningReviewChange: (Boolean) -> Unit = {},
   onHabitRemindersChange: (Boolean) -> Unit = {},
   geminiApiKey: String = "",
+  isGeminiVerified: Boolean = false,
   onSaveGeminiApiKey: (String) -> Unit = {},
   onClearGeminiApiKey: () -> Unit = {},
   aiLanguage: AiLanguage = AiLanguage.AUTO,
@@ -266,10 +267,16 @@ fun SettingsScreen(
         // Group 1: AI & GEMINI COACH
         item {
           SettingsGroupSection(title = "AI COACH & GEMINI") {
+            val geminiStatusText = when {
+              geminiApiKey.isBlank() -> "Not Configured"
+              isGeminiVerified -> "Connected & Verified"
+              else -> "Configured (Unverified)"
+            }
+
             SettingsItemRow(
               icon = Icons.Outlined.AutoAwesome,
               title = "Gemini AI Coach",
-              value = if (geminiApiKey.isNotBlank()) "Configured" else "Not Configured",
+              value = geminiStatusText,
               onClick = {
                 onClearTestConnectionResult()
                 showGeminiConfigSheet = true
@@ -475,28 +482,29 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(18.dp))
 
         // Connection Status Banner
+        val isSuccessfullyVerified = testConnectionResult is ConnectionTestResult.Success || (geminiApiKey.isNotBlank() && isGeminiVerified && testConnectionResult == null)
+        val isFailedState = testConnectionResult is ConnectionTestResult.InvalidKey ||
+          testConnectionResult is ConnectionTestResult.QuotaExhausted ||
+          testConnectionResult is ConnectionTestResult.Error
+
         Surface(
           shape = RoundedCornerShape(12.dp),
           color = when {
-            testConnectionResult is ConnectionTestResult.Success -> Color(0xFFE8F5E9)
-            testConnectionResult is ConnectionTestResult.InvalidKey ||
-            testConnectionResult is ConnectionTestResult.QuotaExhausted ||
-            testConnectionResult is ConnectionTestResult.Error -> Color(0xFFFFEBEE)
+            isSuccessfullyVerified -> Color(0xFFE8F5E9)
+            isFailedState -> Color(0xFFFFEBEE)
             testConnectionResult is ConnectionTestResult.NoInternet ||
             testConnectionResult is ConnectionTestResult.Timeout -> Color(0xFFFFF3E0)
-            geminiApiKey.isNotBlank() -> DayFlowSecondary.copy(alpha = 0.1f)
+            geminiApiKey.isNotBlank() -> DayFlowTertiary.copy(alpha = 0.12f)
             else -> DayFlowSurfaceContainerLow
           },
           border = BorderStroke(
             1.dp,
             when {
-              testConnectionResult is ConnectionTestResult.Success -> Color(0xFF81C784)
-              testConnectionResult is ConnectionTestResult.InvalidKey ||
-              testConnectionResult is ConnectionTestResult.QuotaExhausted ||
-              testConnectionResult is ConnectionTestResult.Error -> Color(0xFFE57373)
+              isSuccessfullyVerified -> Color(0xFF81C784)
+              isFailedState -> Color(0xFFE57373)
               testConnectionResult is ConnectionTestResult.NoInternet ||
               testConnectionResult is ConnectionTestResult.Timeout -> Color(0xFFFFB74D)
-              geminiApiKey.isNotBlank() -> DayFlowSecondary.copy(alpha = 0.25f)
+              geminiApiKey.isNotBlank() -> DayFlowTertiary.copy(alpha = 0.3f)
               else -> DayFlowCardBorder
             }
           ),
@@ -511,24 +519,19 @@ fun SettingsScreen(
           ) {
             Icon(
               imageVector = when {
-                testConnectionResult is ConnectionTestResult.Success -> Icons.Default.CheckCircle
+                isSuccessfullyVerified -> Icons.Default.CheckCircle
                 testConnectionResult is ConnectionTestResult.NoInternet -> Icons.Default.WifiOff
-                testConnectionResult is ConnectionTestResult.InvalidKey ||
-                testConnectionResult is ConnectionTestResult.QuotaExhausted ||
-                testConnectionResult is ConnectionTestResult.Error ||
-                testConnectionResult is ConnectionTestResult.Timeout -> Icons.Default.ErrorOutline
-                geminiApiKey.isNotBlank() -> Icons.Default.CheckCircle
+                isFailedState || testConnectionResult is ConnectionTestResult.Timeout -> Icons.Default.ErrorOutline
+                geminiApiKey.isNotBlank() -> Icons.Default.Key
                 else -> Icons.Default.Key
               },
               contentDescription = null,
               tint = when {
-                testConnectionResult is ConnectionTestResult.Success -> Color(0xFF2E7D32)
-                testConnectionResult is ConnectionTestResult.InvalidKey ||
-                testConnectionResult is ConnectionTestResult.QuotaExhausted ||
-                testConnectionResult is ConnectionTestResult.Error -> Color(0xFFC62828)
+                isSuccessfullyVerified -> Color(0xFF2E7D32)
+                isFailedState -> Color(0xFFC62828)
                 testConnectionResult is ConnectionTestResult.NoInternet ||
                 testConnectionResult is ConnectionTestResult.Timeout -> Color(0xFFEF6C00)
-                geminiApiKey.isNotBlank() -> DayFlowSecondary
+                geminiApiKey.isNotBlank() -> DayFlowTertiary
                 else -> DayFlowOnSurfaceVariant
               },
               modifier = Modifier.size(22.dp)
@@ -538,12 +541,13 @@ fun SettingsScreen(
               Text(
                 text = when {
                   testConnectionResult is ConnectionTestResult.Success -> "Connection Active & Verified"
+                  geminiApiKey.isNotBlank() && isGeminiVerified && testConnectionResult == null -> "Connection Active & Verified"
                   testConnectionResult is ConnectionTestResult.InvalidKey -> "Invalid API Key"
                   testConnectionResult is ConnectionTestResult.NoInternet -> "Internet Unavailable"
                   testConnectionResult is ConnectionTestResult.QuotaExhausted -> "Quota / Rate Limit Exceeded"
                   testConnectionResult is ConnectionTestResult.Timeout -> "Request Timed Out"
                   testConnectionResult is ConnectionTestResult.Error -> "Connection Issue"
-                  geminiApiKey.isNotBlank() -> "Gemini API Configured"
+                  geminiApiKey.isNotBlank() -> "Gemini API Configured (Unverified)"
                   else -> "Gemini API Not Configured"
                 },
                 style = MaterialTheme.typography.titleSmall.copy(
@@ -551,10 +555,8 @@ fun SettingsScreen(
                   fontWeight = FontWeight.SemiBold
                 ),
                 color = when {
-                  testConnectionResult is ConnectionTestResult.Success -> Color(0xFF1B5E20)
-                  testConnectionResult is ConnectionTestResult.InvalidKey ||
-                  testConnectionResult is ConnectionTestResult.QuotaExhausted ||
-                  testConnectionResult is ConnectionTestResult.Error -> Color(0xFFB71C1C)
+                  isSuccessfullyVerified -> Color(0xFF1B5E20)
+                  isFailedState -> Color(0xFFB71C1C)
                   testConnectionResult is ConnectionTestResult.NoInternet ||
                   testConnectionResult is ConnectionTestResult.Timeout -> Color(0xFFE65100)
                   geminiApiKey.isNotBlank() -> DayFlowOnSurface
@@ -570,7 +572,11 @@ fun SettingsScreen(
                   is ConnectionTestResult.QuotaExhausted -> res.message
                   is ConnectionTestResult.Timeout -> res.message
                   is ConnectionTestResult.Error -> res.message
-                  else -> if (geminiApiKey.isNotBlank()) "Using your saved personal Gemini API key." else "Enter your API key below or use the mindful offline coach."
+                  else -> when {
+                    geminiApiKey.isNotBlank() && isGeminiVerified -> "Gemini 3.5 Flash is verified and active."
+                    geminiApiKey.isNotBlank() -> "Key stored. Tap 'Test Connection' below to verify live access to Gemini 3.5 Flash."
+                    else -> "Enter your API key below or use the mindful offline coach."
+                  }
                 },
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                 color = DayFlowOnSurfaceVariant

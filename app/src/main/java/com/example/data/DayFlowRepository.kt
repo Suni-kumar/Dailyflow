@@ -180,25 +180,48 @@ class DayFlowRepository(
   )
   val coachInsights: StateFlow<List<CoachInsight>> = _coachInsights.asStateFlow()
 
+  // Task sorting comparator: scheduled time ascending, then priority, then stable id; completed cleanly separated
+  fun sortTasks(taskList: List<TaskItem>): List<TaskItem> {
+    return taskList.sortedWith(
+      compareBy<TaskItem> { it.isCompleted }
+        .thenBy { com.example.util.DateUtils.parseTimeToMinutes(it.time) }
+        .thenBy {
+          when (it.priority) {
+            com.example.model.TaskPriority.HIGH -> 0
+            com.example.model.TaskPriority.MEDIUM -> 1
+            com.example.model.TaskPriority.LOW -> 2
+          }
+        }
+        .thenBy { it.id }
+    )
+  }
+
   // Reactive all tasks stream
   val tasks: StateFlow<List<TaskItem>> = if (taskDao != null) {
     taskDao.getAllTasks()
-      .map { list -> list.map { it.toTaskItem() } }
+      .map { list -> sortTasks(list.map { it.toTaskItem() }) }
       .flowOn(Dispatchers.Default)
       .stateIn(
         scope = coroutineScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = _inMemoryTasks.value
+        initialValue = sortTasks(_inMemoryTasks.value)
       )
   } else {
-    _inMemoryTasks.asStateFlow()
+    _inMemoryTasks
+      .map { sortTasks(it) }
+      .stateIn(
+        scope = coroutineScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = sortTasks(_inMemoryTasks.value)
+      )
   }
 
   // Get tasks filtered by specific date
   fun getTasksForDate(date: String): Flow<List<TaskItem>> {
     return tasks.map { list ->
       val todayKey = com.example.util.DateUtils.getTodayDateKey()
-      list.filter { it.dueDate == date || (date == todayKey && it.dueDate == "Today") }
+      val filtered = list.filter { it.dueDate == date || (date == todayKey && it.dueDate == "Today") }
+      sortTasks(filtered)
     }.flowOn(Dispatchers.Default)
   }
 
@@ -364,13 +387,15 @@ class DayFlowRepository(
         val habit = habitDao.getHabitById(habitId) ?: return@launch
         val validProgress = newProgress.coerceAtLeast(0)
         val isDone = validProgress >= habit.dailyTarget && habit.dailyTarget > 0
+        val existingCompletion = habitCompletionDao.getCompletion(habitId, date)
+        val wasCompleted = existingCompletion?.isCompleted == true
 
         if (validProgress == 0 && !isDone) {
           habitCompletionDao.deleteCompletion(habitId, date)
         } else {
           habitCompletionDao.insertCompletion(
             HabitCompletionEntity(
-              id = UUID.randomUUID().toString(),
+              id = existingCompletion?.id ?: UUID.randomUUID().toString(),
               habitId = habitId,
               completionDate = date,
               progressValue = validProgress,
@@ -378,11 +403,23 @@ class DayFlowRepository(
             )
           )
         }
+
+        if (isDone && !wasCompleted) {
+          habitDao.updateHabitStreak(habitId, habit.streakDays + 1)
+        } else if (!isDone && wasCompleted) {
+          habitDao.updateHabitStreak(habitId, (habit.streakDays - 1).coerceAtLeast(0))
+        }
       } else {
         _inMemoryHabits.value = _inMemoryHabits.value.map { habit ->
           if (habit.id == habitId) {
             val isDone = newProgress >= habit.dailyTarget && habit.dailyTarget > 0
-            habit.copy(currentProgress = newProgress, completedToday = isDone)
+            val wasDone = habit.completedToday
+            val newStreak = when {
+              isDone && !wasDone -> habit.streakDays + 1
+              !isDone && wasDone -> (habit.streakDays - 1).coerceAtLeast(0)
+              else -> habit.streakDays
+            }
+            habit.copy(currentProgress = newProgress, completedToday = isDone, streakDays = newStreak)
           } else {
             habit
           }
@@ -397,6 +434,39 @@ class DayFlowRepository(
         habitDao.insertHabit(habit.toEntity())
       } else {
         _inMemoryHabits.value = _inMemoryHabits.value + habit
+      }
+    }
+  }
+
+  fun updateHabit(habit: HabitItem) {
+    coroutineScope.launch {
+      if (habitDao != null) {
+        val existing = habitDao.getHabitById(habit.id)
+        if (existing != null) {
+          habitDao.updateHabit(
+            existing.copy(
+              name = habit.title,
+              category = habit.category,
+              dailyTarget = habit.dailyTarget,
+              unit = habit.unit,
+              reminderTime = habit.reminderTime
+            )
+          )
+        } else {
+          habitDao.updateHabit(habit.toEntity())
+        }
+      } else {
+        _inMemoryHabits.value = _inMemoryHabits.value.map {
+          if (it.id == habit.id) {
+            it.copy(
+              title = habit.title,
+              category = habit.category,
+              dailyTarget = habit.dailyTarget,
+              unit = habit.unit,
+              reminderTime = habit.reminderTime
+            )
+          } else it
+        }
       }
     }
   }
@@ -548,7 +618,8 @@ class DayFlowRepository(
     }
     val (calculatedCurrentStreak, _) = DateUtils.calculateStreak(completedDates, todayKey)
     val maxHabitStreak = habitList.maxOfOrNull { it.streakDays } ?: 0
-    val finalStreak = maxOf(calculatedCurrentStreak, maxHabitStreak)
+    val offset = manualStreakOffset.value
+    val finalStreak = (maxOf(calculatedCurrentStreak, maxHabitStreak) + offset).coerceAtLeast(0)
 
     return DailyProgressSummary(
       totalTasks = taskList.size,
@@ -564,7 +635,8 @@ class DayFlowRepository(
     timeRange: StatsTimeRange,
     taskList: List<TaskItem>,
     habitList: List<HabitItem>,
-    goalList: List<GoalItem> = emptyList()
+    goalList: List<GoalItem> = emptyList(),
+    streakAdjustment: Int = 0
   ): StatisticsData {
     val todayKey = DateUtils.getTodayDateKey()
     val dateKeys = DateUtils.getLastNDaysKeys(timeRange.days)
@@ -643,12 +715,20 @@ class DayFlowRepository(
 
     val (calculatedCurrentStreak, calculatedBestStreak) = DateUtils.calculateStreak(completedDates, todayKey)
     val habitMaxStreak = habitList.maxOfOrNull { it.streakDays } ?: 0
-    val finalCurrentStreak = maxOf(calculatedCurrentStreak, if (habitList.any { it.completedToday }) habitMaxStreak else 0)
+    val baseCurrentStreak = maxOf(calculatedCurrentStreak, if (habitList.any { it.completedToday }) habitMaxStreak else 0)
+    val finalCurrentStreak = (baseCurrentStreak + streakAdjustment).coerceAtLeast(0)
     val finalBestStreak = maxOf(finalCurrentStreak, calculatedBestStreak, habitMaxStreak)
 
     // Recent 5 days completion dots
     val recent5Keys = DateUtils.getLastNDaysKeys(5)
-    val recentStreakDays = recent5Keys.map { completedDates.contains(it) }
+    val recentStreakDays = if (finalCurrentStreak == 0) {
+      List(5) { false }
+    } else {
+      recent5Keys.mapIndexed { idx, key ->
+        val offsetFromToday = 4 - idx
+        completedDates.contains(key) || offsetFromToday < finalCurrentStreak
+      }
+    }
 
     // Category breakdown across in-range tasks and all active tasks/habits
     val categorySourceTasks = if (inRangeTasks.isNotEmpty()) inRangeTasks else tasksWithNormalizedDate
@@ -690,125 +770,39 @@ class DayFlowRepository(
     )
   }
 
+  private val _inMemoryStreakOffset = MutableStateFlow(0)
+  val manualStreakOffset: StateFlow<Int> = preferencesManager?.manualStreakAdjustment
+    ?: _inMemoryStreakOffset.asStateFlow()
+
   fun manualAddStreakDay() {
-    coroutineScope.launch {
-      val todayKey = DateUtils.getTodayDateKey()
-      val allCompletions = if (habitCompletionDao != null) habitCompletionDao.getAllCompletionsList() else emptyList()
-      val allTasks = if (taskDao != null) taskDao.getAllTasksList() else _inMemoryTasks.value.map { it.toEntity() }
-      val completedDates = mutableSetOf<String>()
-      allCompletions.filter { it.isCompleted }.forEach { completedDates.add(it.completionDate) }
-      allTasks.filter { it.isCompleted }.forEach {
-        val d = if (it.dueDate == "Today" || it.dueDate.isBlank()) todayKey else it.dueDate
-        completedDates.add(d)
-      }
-
-      val (currentStreak, _) = DateUtils.calculateStreak(completedDates, todayKey)
-      val targetDateKey = if (!completedDates.contains(todayKey)) {
-        todayKey
-      } else {
-        DateUtils.getDateKeyOffset(todayKey, -currentStreak)
-      }
-
-      if (habitCompletionDao != null) {
-        habitCompletionDao.insertCompletion(
-          HabitCompletionEntity(
-            id = "streak_manual_${UUID.randomUUID()}",
-            habitId = "streak_tracker",
-            completionDate = targetDateKey,
-            progressValue = 1,
-            isCompleted = true
-          )
-        )
-      } else {
-        _inMemoryHabits.value = _inMemoryHabits.value.map {
-          it.copy(streakDays = it.streakDays + 1)
-        }
-      }
+    if (preferencesManager != null) {
+      preferencesManager.addManualStreakDay()
+    } else {
+      _inMemoryStreakOffset.value += 1
     }
   }
 
   fun manualRemoveStreakDay() {
-    coroutineScope.launch {
-      val todayKey = DateUtils.getTodayDateKey()
-      val allCompletions = if (habitCompletionDao != null) habitCompletionDao.getAllCompletionsList() else emptyList()
-      val allTasks = if (taskDao != null) taskDao.getAllTasksList() else _inMemoryTasks.value.map { it.toEntity() }
-      val completedDates = mutableSetOf<String>()
-      allCompletions.filter { it.isCompleted }.forEach { completedDates.add(it.completionDate) }
-      allTasks.filter { it.isCompleted }.forEach {
-        val d = if (it.dueDate == "Today" || it.dueDate.isBlank()) todayKey else it.dueDate
-        completedDates.add(d)
-      }
-
-      val (currentStreak, _) = DateUtils.calculateStreak(completedDates, todayKey)
-      if (currentStreak <= 0) return@launch
-
-      val targetDateKey = if (completedDates.contains(todayKey)) {
-        todayKey
-      } else {
-        DateUtils.getDateKeyOffset(todayKey, -1)
-      }
-
-      if (habitCompletionDao != null) {
-        val habitList = habitDao?.getAllHabitsList() ?: emptyList()
-        for (h in habitList) {
-          habitCompletionDao.deleteCompletion(h.id, targetDateKey)
-        }
-        habitCompletionDao.deleteCompletion("streak_tracker", targetDateKey)
-      }
-      if (taskDao != null) {
-        val dayTasks = taskDao.getTasksByDateSync(targetDateKey)
-        for (t in dayTasks) {
-          if (t.isCompleted) {
-            taskDao.updateTaskCompletion(t.id, false)
-          }
-        }
-      }
-      _inMemoryHabits.value = _inMemoryHabits.value.map {
-        it.copy(streakDays = (it.streakDays - 1).coerceAtLeast(0))
-      }
+    if (preferencesManager != null) {
+      preferencesManager.removeManualStreakDay()
+    } else {
+      _inMemoryStreakOffset.value -= 1
     }
   }
 
   fun manualResetStreak() {
-    coroutineScope.launch {
-      val todayKey = DateUtils.getTodayDateKey()
-      val allCompletions = if (habitCompletionDao != null) habitCompletionDao.getAllCompletionsList() else emptyList()
-      val allTasks = if (taskDao != null) taskDao.getAllTasksList() else _inMemoryTasks.value.map { it.toEntity() }
-      val completedDates = mutableSetOf<String>()
-      allCompletions.filter { it.isCompleted }.forEach { completedDates.add(it.completionDate) }
-      allTasks.filter { it.isCompleted }.forEach {
-        val d = if (it.dueDate == "Today" || it.dueDate.isBlank()) todayKey else it.dueDate
-        completedDates.add(d)
-      }
-
-      val (currentStreak, _) = DateUtils.calculateStreak(completedDates, todayKey)
-      val habitList = habitDao?.getAllHabitsList() ?: emptyList()
-
-      for (i in 0..(currentStreak + 1)) {
-        val dateKey = DateUtils.getDateKeyOffset(todayKey, -i)
-        if (habitCompletionDao != null) {
-          for (h in habitList) {
-            habitCompletionDao.deleteCompletion(h.id, dateKey)
-          }
-          habitCompletionDao.deleteCompletion("streak_tracker", dateKey)
-        }
-        if (taskDao != null) {
-          val dayTasks = taskDao.getTasksByDateSync(dateKey)
-          for (t in dayTasks) {
-            if (t.isCompleted) {
-              taskDao.updateTaskCompletion(t.id, false)
-            }
-          }
-        }
-      }
-      if (habitDao != null) {
-        for (h in habitList) {
-          habitDao.updateHabitStreak(h.id, 0)
-        }
-      }
-      _inMemoryHabits.value = _inMemoryHabits.value.map {
-        it.copy(streakDays = 0, completedToday = false)
-      }
+    val todayKey = DateUtils.getTodayDateKey()
+    val completedDates = tasks.value.filter { it.isCompleted }.map {
+      if (it.dueDate == "Today" || it.dueDate.isBlank()) todayKey else it.dueDate
+    }.toSet()
+    val habitList = habits.value
+    val (calcStreak, _) = DateUtils.calculateStreak(completedDates, todayKey)
+    val habitMax = habitList.maxOfOrNull { it.streakDays } ?: 0
+    val base = maxOf(calcStreak, if (habitList.any { it.completedToday }) habitMax else 0)
+    if (preferencesManager != null) {
+      preferencesManager.resetManualStreak(base)
+    } else {
+      _inMemoryStreakOffset.value = -base
     }
   }
 

@@ -293,9 +293,21 @@ object DayFlowContextBuilder {
   }
 }
 
+enum class AiResponseMode {
+  LIVE_GEMINI,
+  LOCAL_FALLBACK
+}
+
+data class CoachStreamResult(
+  val text: String,
+  val mode: AiResponseMode,
+  val isErrorFallback: Boolean = false,
+  val errorMessage: String? = null
+)
+
 object DayFlowAiService {
 
-  private const val MODEL_NAME = "gemini-2.5-flash"
+  private const val MODEL_NAME = "gemini-3.5-flash"
   private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
   private val okHttpClient = OkHttpClient.Builder()
@@ -331,7 +343,7 @@ object DayFlowAiService {
   }
 
   /**
-   * Tests connection to Gemini API by sending a minimal token ping request.
+   * Tests connection to Gemini API by sending a minimal token ping request to gemini-3.5-flash.
    */
   suspend fun testConnection(apiKey: String): ConnectionTestResult = withContext(Dispatchers.IO) {
     val key = resolveApiKey(apiKey)
@@ -368,9 +380,18 @@ object DayFlowAiService {
 
       when (code) {
         200 -> ConnectionTestResult.Success
-        400, 401, 403 -> {
-          val errorMsg = parseErrorMessage(body) ?: "API key is invalid or lacks Gemini API permissions."
+        400 -> {
+          val errorMsg = parseErrorMessage(body) ?: "Bad request: Gemini parameters were invalid."
           ConnectionTestResult.InvalidKey(errorMsg)
+        }
+        401 -> {
+          ConnectionTestResult.InvalidKey("Invalid API key. Please verify your Gemini API key.")
+        }
+        403 -> {
+          ConnectionTestResult.InvalidKey("Gemini API access denied. Ensure your API key has Generative Language API access enabled.")
+        }
+        404 -> {
+          ConnectionTestResult.Error("Gemini model or endpoint not found ($MODEL_NAME). Please verify endpoint configuration.")
         }
         429 -> ConnectionTestResult.QuotaExhausted("Gemini API quota or rate limit has been exceeded.")
         in 500..599 -> ConnectionTestResult.Error("Gemini service is temporarily unavailable (HTTP $code).")
@@ -398,7 +419,7 @@ object DayFlowAiService {
     language: AiLanguage,
     userApiKey: String,
     onChunk: (String) -> Unit
-  ): String = withContext(Dispatchers.IO) {
+  ): CoachStreamResult = withContext(Dispatchers.IO) {
     val apiKey = resolveApiKey(userApiKey)
     val latestUserMessage = conversationHistory.lastOrNull { it.isUser }?.text.orEmpty()
     val structuredContext = DayFlowContextBuilder.buildStructuredContext(context, latestUserMessage)
@@ -412,7 +433,10 @@ object DayFlowAiService {
       fallback.chunked(14).forEach { chunk ->
         onChunk(chunk)
       }
-      return@withContext fallback
+      return@withContext CoachStreamResult(
+        text = fallback,
+        mode = AiResponseMode.LOCAL_FALLBACK
+      )
     }
 
     val requestUrl = "$BASE_URL/$MODEL_NAME:streamGenerateContent?alt=sse&key=$apiKey"
@@ -431,16 +455,25 @@ object DayFlowAiService {
       val response = okHttpClient.newCall(request).execute()
       if (!response.isSuccessful) {
         val code = response.code
+        val errorBody = response.body?.string().orEmpty()
+        val errorDetail = parseErrorMessage(errorBody) ?: "HTTP $code"
         val fallback = generateLocalOfflineCoaching(
           userQuery = latestUserMessage,
           context = context,
           language = language
         )
-        fallback.chunked(14).forEach { chunk -> onChunk(chunk) }
-        return@withContext fallback
+        val notice = "[Gemini unavailable ($errorDetail). Providing assistance via DayFlow's mindful offline coach]\n\n"
+        val fullResponse = notice + fallback
+        fullResponse.chunked(14).forEach { chunk -> onChunk(chunk) }
+        return@withContext CoachStreamResult(
+          text = fullResponse,
+          mode = AiResponseMode.LOCAL_FALLBACK,
+          isErrorFallback = true,
+          errorMessage = "Gemini API error ($code): $errorDetail"
+        )
       }
 
-      val responseBody = response.body ?: throw IOException("Empty response body")
+      val responseBody = response.body ?: throw IOException("Empty response body from Gemini")
       responseBody.byteStream().bufferedReader().use { reader ->
         var line: String?
         while (reader.readLine().also { line = it } != null) {
@@ -469,24 +502,45 @@ object DayFlowAiService {
 
       val resultText = accumulatedText.toString().trim()
       if (resultText.isNotBlank()) {
-        resultText
+        return@withContext CoachStreamResult(
+          text = resultText,
+          mode = AiResponseMode.LIVE_GEMINI
+        )
       } else {
         val fallback = generateLocalOfflineCoaching(
           userQuery = latestUserMessage,
           context = context,
           language = language
         )
-        onChunk(fallback)
-        fallback
+        val notice = "[Gemini returned empty response. Providing assistance via DayFlow offline coach]\n\n"
+        val fullResponse = notice + fallback
+        onChunk(fullResponse)
+        return@withContext CoachStreamResult(
+          text = fullResponse,
+          mode = AiResponseMode.LOCAL_FALLBACK,
+          isErrorFallback = true,
+          errorMessage = "Empty Gemini response"
+        )
       }
     } catch (e: Exception) {
+      if (e is kotlinx.coroutines.CancellationException) {
+        throw e
+      }
       val fallback = generateLocalOfflineCoaching(
         userQuery = latestUserMessage,
         context = context,
         language = language
       )
-      onChunk(fallback)
-      fallback
+      val errorMsg = e.localizedMessage ?: "Network error"
+      val notice = "[Could not reach Gemini ($errorMsg). Providing assistance via DayFlow offline coach]\n\n"
+      val fullResponse = notice + fallback
+      fullResponse.chunked(14).forEach { chunk -> onChunk(chunk) }
+      return@withContext CoachStreamResult(
+        text = fullResponse,
+        mode = AiResponseMode.LOCAL_FALLBACK,
+        isErrorFallback = true,
+        errorMessage = errorMsg
+      )
     }
   }
 
@@ -587,6 +641,14 @@ object DayFlowAiService {
     val streak = context.summary.currentStreak
     val focusMin = context.summary.focusMinutes
     val activeGoal = context.activeGoals.firstOrNull { !it.isCompleted }
+    val matchedGoal = if (userQuery.isNotBlank()) {
+      context.activeGoals.find { goal ->
+        userQuery.contains(goal.title, ignoreCase = true) ||
+          goal.title.split(" ").filter { it.length > 3 }.any { word -> userQuery.contains(word, ignoreCase = true) }
+      } ?: activeGoal
+    } else {
+      activeGoal
+    }
     val completedHabits = context.todayHabits.count { it.completedToday }
     val totalHabits = context.todayHabits.size
 
@@ -597,9 +659,13 @@ object DayFlowAiService {
       userQuery.contains("mera", ignoreCase = true) ||
       userQuery.contains("kaise", ignoreCase = true) ||
       userQuery.contains("kaisi", ignoreCase = true) ||
-      userQuery.contains("batao", ignoreCase = true)
+      userQuery.contains("batao", ignoreCase = true) ||
+      userQuery.contains("namaste", ignoreCase = true)
 
-    val queryLower = userQuery.lowercase()
+    val queryTrimmed = userQuery.trim().lowercase()
+    val isGreeting = queryTrimmed.matches(Regex("^(hi|hello|hey|namaste|good morning|good afternoon|good evening|pranam|hola|yo)[!., ]?.*")) ||
+      queryTrimmed in listOf("hi", "hello", "hey", "namaste", "hola", "yo")
+
     val intent = DayFlowContextBuilder.detectIntent(userQuery, context.queryIntent.takeIf { it != CoachIntent.GENERAL }?.let {
       when (it) {
         CoachIntent.DAILY_BRIEFING -> CoachActionType.DAILY_BRIEFING
@@ -610,6 +676,10 @@ object DayFlowAiService {
     })
 
     if (isHindi) {
+      if (isGreeting) {
+        return "Namaste! Main DayFlow ka mindful assistant hoon. Aapke schedule, habits aur goals ke sath aapki madad karne ke liye taiyar hoon. Aaj aap kis cheez par dhyan dena chahte hain?"
+      }
+
       return when (intent) {
         CoachIntent.DAILY_BRIEFING -> {
           if (remainingTasks.isNotEmpty()) {
@@ -637,8 +707,8 @@ object DayFlowAiService {
         }
 
         CoachIntent.GOAL_GUIDANCE -> {
-          if (activeGoal != null) {
-            "Aapka active goal '${activeGoal.title}' filhal ${activeGoal.progressPercentage}% par hai (${activeGoal.currentProgress}/${activeGoal.targetProgress} ${activeGoal.unit}). Deadline: ${activeGoal.deadline}. Daily 25-30 minutes focus block lagane se steady progress milegi."
+          if (matchedGoal != null) {
+            "Aapka goal '${matchedGoal.title}' filhal ${matchedGoal.progressPercentage}% par hai (${matchedGoal.currentProgress}/${matchedGoal.targetProgress} ${matchedGoal.unit}). Deadline: ${matchedGoal.deadline}. Daily 25-30 minutes focus block lagane se steady progress milegi."
           } else {
             "Filhal koi active goal set nahi hai. Goals screen par jakar apna agla focus target add kar sakte hain."
           }
@@ -662,6 +732,10 @@ object DayFlowAiService {
       }
     }
 
+    if (isGreeting) {
+      return "Hello! I'm your mindful DayFlow coach. I'm here to help you reflect on your day, organize your schedule, and stay steady with your habits and goals. How can I assist you right now?"
+    }
+
     // English responses
     return when (intent) {
       CoachIntent.DAILY_BRIEFING -> {
@@ -669,7 +743,7 @@ object DayFlowAiService {
           val topTask = remainingTasks.first()
           val highPriority = remainingTasks.firstOrNull { it.priority == TaskPriority.HIGH }
           val priorityAdvice = if (highPriority != null) "Anchor your morning around high-priority item '${highPriority.title}' at ${highPriority.time}." else "Begin with '${topTask.title}' at ${topTask.time} to establish steady momentum."
-          val goalMention = if (activeGoal != null) " Keep '${activeGoal.title}' (${activeGoal.progressPercentage}%) in mind for your afternoon focus." else ""
+          val goalMention = if (matchedGoal != null) " Keep '${matchedGoal.title}' (${matchedGoal.progressPercentage}%) in mind for your afternoon focus." else ""
           "You have $totalTasks tasks planned today with ${remainingTasks.size} remaining. $priorityAdvice$goalMention You have $completedHabits/$totalHabits habits completed with a $streak-day streak."
         } else if (totalTasks > 0) {
           "All $totalTasks planned tasks for today are already complete. A wonderful moment to reflect on active goals or enjoy a restful evening."
@@ -691,8 +765,8 @@ object DayFlowAiService {
       }
 
       CoachIntent.GOAL_GUIDANCE -> {
-        if (activeGoal != null) {
-          "For '${activeGoal.title}', you are currently at ${activeGoal.progressPercentage}% (${activeGoal.currentProgress}/${activeGoal.targetProgress} ${activeGoal.unit}) with ${activeGoal.deadline}. Recommended next step: Schedule dedicated 30-minute focus blocks specifically tagged to ${activeGoal.category.displayName} to keep momentum high."
+        if (matchedGoal != null) {
+          "For '${matchedGoal.title}', you are currently at ${matchedGoal.progressPercentage}% (${matchedGoal.currentProgress}/${matchedGoal.targetProgress} ${matchedGoal.unit}) with deadline ${matchedGoal.deadline}. Recommended next step: Schedule dedicated 30-minute focus blocks specifically tagged to ${matchedGoal.category.displayName} to keep momentum high."
         } else {
           "You do not have any active goals right now. Consider adding a focused milestone in the Goals section to anchor your weekly priorities."
         }

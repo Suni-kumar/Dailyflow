@@ -599,7 +599,7 @@ private fun HabitsSection(
               val subtitle = if (isMeasurable) {
                 "${habit.currentProgress}/${habit.dailyTarget} ${habit.unit}".trim()
               } else {
-                if (habit.completedToday) "Completed" else "Tap to complete"
+                if (habit.completedToday) "Completed" else "Incomplete"
               }
 
               val (icon, tint) = resolveHabitVisuals(habit)
@@ -610,13 +610,13 @@ private fun HabitsSection(
                 progress = habit.progressFraction,
                 icon = icon,
                 tintColor = tint,
+                isCompleted = habit.completedToday,
                 modifier = Modifier.weight(1f),
                 onClick = {
-                  if (isMeasurable) {
-                    onOpenHabitProgress(habit)
-                  } else {
-                    onToggleHabit(habit.id)
-                  }
+                  onOpenHabitProgress(habit)
+                },
+                onToggle = {
+                  onToggleHabit(habit.id)
                 }
               )
             }
@@ -661,11 +661,14 @@ private fun HabitCard(
   progress: Float,
   icon: ImageVector,
   tintColor: Color,
+  isCompleted: Boolean = false,
   modifier: Modifier = Modifier,
-  onClick: () -> Unit
+  onClick: () -> Unit,
+  onToggle: (() -> Unit)? = null
 ) {
   Surface(
     modifier = modifier
+      .clip(RoundedCornerShape(16.dp))
       .clickable { onClick() }
       .testTag("habit_card_${title.lowercase()}"),
     shape = RoundedCornerShape(16.dp),
@@ -679,7 +682,13 @@ private fun HabitCard(
       horizontalAlignment = Alignment.CenterHorizontally
     ) {
       Box(
-        modifier = Modifier.size(48.dp),
+        modifier = Modifier
+          .size(48.dp)
+          .clip(CircleShape)
+          .clickable {
+            if (onToggle != null) onToggle() else onClick()
+          }
+          .testTag("habit_ring_${title.lowercase()}"),
         contentAlignment = Alignment.Center
       ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -688,11 +697,12 @@ private fun HabitCard(
             color = DayFlowSurfaceVariant,
             style = Stroke(width = strokeWidth)
           )
-          if (progress > 0f) {
+          if (progress > 0f || isCompleted) {
+            val sweep = if (isCompleted) 360f else (progress * 360f).coerceIn(0f, 360f)
             drawArc(
               color = tintColor,
               startAngle = -90f,
-              sweepAngle = progress * 360f,
+              sweepAngle = sweep,
               useCenter = false,
               style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
             )
@@ -700,8 +710,8 @@ private fun HabitCard(
         }
 
         Icon(
-          imageVector = icon,
-          contentDescription = null,
+          imageVector = if (isCompleted) Icons.Default.Check else icon,
+          contentDescription = if (isCompleted) "Completed" else null,
           tint = tintColor,
           modifier = Modifier.size(20.dp)
         )

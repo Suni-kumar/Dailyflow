@@ -9,6 +9,20 @@ plugins {
   alias(libs.plugins.google.services)
 }
 
+val baseVersionCode = 2
+val baseVersionName = "1.1.0"
+val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+val envVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull()
+  ?: (project.findProperty("versionCode") as? String)?.toIntOrNull()
+val computedVersionCode = when {
+  envVersionCode != null -> envVersionCode
+  runNumber != null -> baseVersionCode + runNumber
+  else -> baseVersionCode
+}
+val computedVersionName = System.getenv("VERSION_NAME")
+  ?: (project.findProperty("versionName") as? String)
+  ?: baseVersionName
+
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
@@ -17,8 +31,8 @@ android {
     applicationId = "com.aistudio.dayflow.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0.0"
+    versionCode = computedVersionCode
+    versionName = computedVersionName
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

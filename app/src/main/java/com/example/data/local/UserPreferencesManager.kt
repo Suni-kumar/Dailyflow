@@ -70,11 +70,18 @@ class UserPreferencesManager(context: Context) {
   private val _geminiApiKey = MutableStateFlow(loadGeminiApiKey())
   val geminiApiKey: StateFlow<String> = _geminiApiKey.asStateFlow()
 
+  private val _geminiConnectionVerified = MutableStateFlow(loadGeminiConnectionVerified())
+  val geminiConnectionVerified: StateFlow<Boolean> = _geminiConnectionVerified.asStateFlow()
+
   private val _aiLanguage = MutableStateFlow(loadAiLanguage())
   val aiLanguage: StateFlow<AiLanguage> = _aiLanguage.asStateFlow()
 
   private fun loadGeminiApiKey(): String {
     return prefs.getString(KEY_GEMINI_API_KEY, "")?.trim().orEmpty()
+  }
+
+  private fun loadGeminiConnectionVerified(): Boolean {
+    return prefs.getBoolean(KEY_GEMINI_CONNECTION_VERIFIED, false)
   }
 
   private fun loadAiLanguage(): AiLanguage {
@@ -153,6 +160,32 @@ class UserPreferencesManager(context: Context) {
     _customCategories.value = categories
   }
 
+  private val _manualStreakAdjustment = MutableStateFlow(loadManualStreakAdjustment())
+  val manualStreakAdjustment: StateFlow<Int> = _manualStreakAdjustment.asStateFlow()
+
+  private fun loadManualStreakAdjustment(): Int {
+    return prefs.getInt(KEY_MANUAL_STREAK_ADJUSTMENT, 0)
+  }
+
+  fun setManualStreakAdjustment(adjustment: Int) {
+    _manualStreakAdjustment.value = adjustment
+    prefs.edit().putInt(KEY_MANUAL_STREAK_ADJUSTMENT, adjustment).apply()
+  }
+
+  fun addManualStreakDay() {
+    val updated = _manualStreakAdjustment.value + 1
+    setManualStreakAdjustment(updated)
+  }
+
+  fun removeManualStreakDay() {
+    val updated = _manualStreakAdjustment.value - 1
+    setManualStreakAdjustment(updated)
+  }
+
+  fun resetManualStreak(baseCalculatedStreak: Int) {
+    setManualStreakAdjustment(-baseCalculatedStreak)
+  }
+
   fun setThemeMode(mode: AppThemeMode) {
     prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
     _themeMode.value = mode
@@ -185,13 +218,29 @@ class UserPreferencesManager(context: Context) {
 
   fun setGeminiApiKey(key: String) {
     val trimmed = key.trim()
-    prefs.edit().putString(KEY_GEMINI_API_KEY, trimmed).apply()
+    val isChanged = trimmed != _geminiApiKey.value
+    prefs.edit()
+      .putString(KEY_GEMINI_API_KEY, trimmed)
+      .putBoolean(KEY_GEMINI_CONNECTION_VERIFIED, false)
+      .apply()
     _geminiApiKey.value = trimmed
+    if (isChanged) {
+      _geminiConnectionVerified.value = false
+    }
+  }
+
+  fun setGeminiConnectionVerified(verified: Boolean) {
+    prefs.edit().putBoolean(KEY_GEMINI_CONNECTION_VERIFIED, verified).apply()
+    _geminiConnectionVerified.value = verified
   }
 
   fun clearGeminiApiKey() {
-    prefs.edit().remove(KEY_GEMINI_API_KEY).apply()
+    prefs.edit()
+      .remove(KEY_GEMINI_API_KEY)
+      .putBoolean(KEY_GEMINI_CONNECTION_VERIFIED, false)
+      .apply()
     _geminiApiKey.value = ""
+    _geminiConnectionVerified.value = false
   }
 
   fun setAiLanguage(language: AiLanguage) {
@@ -279,7 +328,9 @@ class UserPreferencesManager(context: Context) {
     private const val KEY_HABIT_REMINDERS = "key_habit_reminders"
     private const val KEY_CUSTOM_CATEGORIES = "key_custom_categories"
     private const val KEY_GEMINI_API_KEY = "key_gemini_api_key"
+    private const val KEY_GEMINI_CONNECTION_VERIFIED = "key_gemini_connection_verified"
     private const val KEY_AI_LANGUAGE = "key_ai_language"
+    private const val KEY_MANUAL_STREAK_ADJUSTMENT = "key_manual_streak_adjustment"
   }
 }
 

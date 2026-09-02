@@ -90,6 +90,9 @@ class DayFlowViewModel(
   private val _isAddHabitSheetOpen = MutableStateFlow(false)
   val isAddHabitSheetOpen: StateFlow<Boolean> = _isAddHabitSheetOpen.asStateFlow()
 
+  private val _editingHabit = MutableStateFlow<HabitItem?>(null)
+  val editingHabit: StateFlow<HabitItem?> = _editingHabit.asStateFlow()
+
   private val _habitForProgressSheet = MutableStateFlow<HabitItem?>(null)
   val habitForProgressSheet: StateFlow<HabitItem?> = _habitForProgressSheet.asStateFlow()
 
@@ -117,11 +120,16 @@ class DayFlowViewModel(
   val activeTaskTargetDate: StateFlow<String?> = _activeTaskTargetDate.asStateFlow()
 
   // Dynamic progress summary calculated strictly for the currently selected date
-  val progressSummary: StateFlow<DailyProgressSummary> = combine(todayTasks, todayHabits) { taskList, habitList ->
+  val progressSummary: StateFlow<DailyProgressSummary> = combine(
+    todayTasks,
+    todayHabits,
+    repository.manualStreakOffset
+  ) { taskList, habitList, streakOffset ->
     val completedTasks = taskList.count { it.isCompleted }
     val completedHabits = habitList.count { it.completedToday }
     val focusMins = taskList.filter { it.isCompleted }.sumOf { it.estimatedMinutes }
     val maxStreak = habitList.maxOfOrNull { it.streakDays } ?: 0
+    val effectiveStreak = (maxStreak + streakOffset).coerceAtLeast(0)
 
     DailyProgressSummary(
       totalTasks = taskList.size,
@@ -129,7 +137,7 @@ class DayFlowViewModel(
       habitsCompleted = completedHabits,
       totalHabits = habitList.size,
       focusMinutes = focusMins,
-      currentStreak = maxStreak
+      currentStreak = effectiveStreak
     )
   }.flowOn(Dispatchers.Default)
   .stateIn(
@@ -152,9 +160,10 @@ class DayFlowViewModel(
     _statsTimeRange,
     allTasks,
     allHabits,
-    goals
-  ) { range: StatsTimeRange, taskList: List<TaskItem>, habitList: List<HabitItem>, goalList: List<GoalItem> ->
-    repository.calculateStatistics(range, taskList, habitList, goalList)
+    goals,
+    repository.manualStreakOffset
+  ) { range: StatsTimeRange, taskList: List<TaskItem>, habitList: List<HabitItem>, goalList: List<GoalItem>, streakOffset: Int ->
+    repository.calculateStatistics(range, taskList, habitList, goalList, streakOffset)
   }.flowOn(Dispatchers.Default)
   .stateIn(
     scope = viewModelScope,
@@ -285,6 +294,20 @@ class DayFlowViewModel(
     _isAddHabitSheetOpen.value = false
   }
 
+  fun openEditHabitSheet(habit: HabitItem) {
+    _editingHabit.value = habit
+    _habitForProgressSheet.value = null
+  }
+
+  fun closeEditHabitSheet() {
+    _editingHabit.value = null
+  }
+
+  fun updateHabit(habit: HabitItem) {
+    repository.updateHabit(habit)
+    _editingHabit.value = null
+  }
+
   fun openHabitProgressSheet(habit: HabitItem) {
     _habitForProgressSheet.value = habit
   }
@@ -395,6 +418,9 @@ class DayFlowViewModel(
   val geminiApiKey: StateFlow<String> = preferencesManager?.geminiApiKey
     ?: MutableStateFlow("").asStateFlow()
 
+  val geminiConnectionVerified: StateFlow<Boolean> = preferencesManager?.geminiConnectionVerified
+    ?: MutableStateFlow(false).asStateFlow()
+
   val aiLanguage: StateFlow<com.example.data.local.AiLanguage> = preferencesManager?.aiLanguage
     ?: MutableStateFlow(com.example.data.local.AiLanguage.AUTO).asStateFlow()
 
@@ -450,6 +476,11 @@ class DayFlowViewModel(
       val result = com.example.data.ai.DayFlowAiService.testConnection(key)
       _testConnectionResult.value = result
       _isTestingConnection.value = false
+      if (result is com.example.data.ai.ConnectionTestResult.Success) {
+        preferencesManager?.setGeminiConnectionVerified(true)
+      } else {
+        preferencesManager?.setGeminiConnectionVerified(false)
+      }
     }
   }
 
@@ -575,7 +606,7 @@ class DayFlowViewModel(
       val accumulatedResponse = StringBuilder()
 
       try {
-        val finalResponse = com.example.data.ai.DayFlowAiService.streamCoachResponse(
+        val streamResult = com.example.data.ai.DayFlowAiService.streamCoachResponse(
           conversationHistory = history,
           context = context,
           language = aiLanguage.value,
@@ -586,12 +617,25 @@ class DayFlowViewModel(
           }
         )
 
-        val finalText = if (accumulatedResponse.isNotEmpty()) accumulatedResponse.toString() else finalResponse
+        val finalText = if (accumulatedResponse.isNotEmpty()) accumulatedResponse.toString() else streamResult.text
         updateAssistantMessage(
           assistantMsgId = assistantMsgId,
           text = finalText,
           isStreaming = false
         )
+
+        if (streamResult.mode == com.example.data.ai.AiResponseMode.LIVE_GEMINI) {
+          if (geminiApiKey.value.isNotBlank()) {
+            preferencesManager?.setGeminiConnectionVerified(true)
+          }
+        } else if (streamResult.isErrorFallback) {
+          if (streamResult.errorMessage?.contains("401") == true ||
+            streamResult.errorMessage?.contains("403") == true ||
+            streamResult.errorMessage?.contains("404") == true
+          ) {
+            preferencesManager?.setGeminiConnectionVerified(false)
+          }
+        }
 
         // Save final message to DB
         _currentSessionId.value?.let { sid ->
@@ -614,7 +658,7 @@ class DayFlowViewModel(
         val newInsight = CoachInsight(
           id = UUID.randomUUID().toString(),
           title = insightTitle,
-          description = finalResponse.take(180),
+          description = streamResult.text.take(180),
           type = InsightType.ADVICE,
           timestamp = "Today"
         )

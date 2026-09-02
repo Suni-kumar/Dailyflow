@@ -321,6 +321,26 @@ object DateUtils {
     }
   }
 
+  fun parseTimeToMinutes(timeStr: String?): Int {
+    if (timeStr.isNullOrBlank()) return Int.MAX_VALUE
+    return try {
+      val clean = timeStr.trim().uppercase(java.util.Locale.US)
+      val parts = clean.split(" ")
+      val timeParts = parts[0].split(":")
+      var hour = timeParts[0].toInt()
+      val min = if (timeParts.size > 1) timeParts[1].toInt() else 0
+      val isPm = parts.size > 1 && parts[1].contains("PM")
+      val isAm = parts.size > 1 && parts[1].contains("AM")
+
+      if (isPm && hour < 12) hour += 12
+      if (isAm && hour == 12) hour = 0
+
+      hour * 60 + min
+    } catch (_: Exception) {
+      Int.MAX_VALUE
+    }
+  }
+
   fun formatIso(date: Date): String {
     return isoFormat.format(date)
   }

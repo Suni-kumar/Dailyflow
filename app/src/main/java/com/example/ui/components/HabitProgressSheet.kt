@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.Button
@@ -63,7 +64,8 @@ fun HabitProgressSheet(
   isOpen: Boolean,
   onDismiss: () -> Unit,
   onUpdateProgress: (habitId: String, newProgress: Int) -> Unit,
-  onDeleteHabit: (habitId: String) -> Unit
+  onDeleteHabit: (habitId: String) -> Unit,
+  onEditHabit: ((HabitItem) -> Unit)? = null
 ) {
   if (!isOpen || habit == null) return
 
@@ -95,7 +97,7 @@ fun HabitProgressSheet(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
           Text(
             text = habit.title,
             style = MaterialTheme.typography.headlineSmall.copy(
@@ -111,16 +113,38 @@ fun HabitProgressSheet(
           )
         }
 
-        IconButton(
-          onClick = onDismiss,
-          modifier = Modifier.size(36.dp)
-        ) {
-          Icon(
-            imageVector = Icons.Default.Close,
-            contentDescription = "Close",
-            tint = DayFlowOnSurfaceVariant,
-            modifier = Modifier.size(22.dp)
-          )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          if (onEditHabit != null) {
+            IconButton(
+              onClick = {
+                onDismiss()
+                onEditHabit(habit)
+              },
+              modifier = Modifier
+                .size(36.dp)
+                .testTag("edit_habit_button")
+            ) {
+              Icon(
+                imageVector = Icons.Default.Edit,
+                contentDescription = "Edit Habit",
+                tint = DayFlowOnSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+              )
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+          }
+
+          IconButton(
+            onClick = onDismiss,
+            modifier = Modifier.size(36.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Default.Close,
+              contentDescription = "Close",
+              tint = DayFlowOnSurfaceVariant,
+              modifier = Modifier.size(22.dp)
+            )
+          }
         }
       }
 
@@ -266,15 +290,17 @@ fun HabitProgressSheet(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
       ) {
-        // Target Completion Action: only eligible when currentProgress >= dailyTarget
+        // Target Completion Action
         OutlinedButton(
           onClick = {
             if (isTargetReached) {
               onUpdateProgress(habit.id, currentProgress)
-              onDismiss()
+            } else {
+              onUpdateProgress(habit.id, habit.dailyTarget)
             }
+            onDismiss()
           },
-          enabled = isTargetReached,
+          enabled = true,
           modifier = Modifier
             .weight(1f)
             .height(48.dp)
@@ -282,19 +308,19 @@ fun HabitProgressSheet(
           shape = RoundedCornerShape(12.dp),
           border = BorderStroke(
             1.dp,
-            if (isTargetReached) MaterialTheme.colorScheme.primary else DayFlowOutlineVariant.copy(alpha = 0.5f)
+            if (isTargetReached) MaterialTheme.colorScheme.primary else DayFlowOutlineVariant
           )
         ) {
           Icon(
             imageVector = Icons.Default.Check,
             contentDescription = null,
-            tint = if (isTargetReached) MaterialTheme.colorScheme.primary else DayFlowOnSurfaceVariant.copy(alpha = 0.4f),
+            tint = if (isTargetReached) MaterialTheme.colorScheme.primary else DayFlowOnSurfaceVariant,
             modifier = Modifier.size(16.dp)
           )
           Spacer(modifier = Modifier.width(6.dp))
           Text(
-            text = if (isTargetReached) "Target Done" else "In Progress",
-            color = if (isTargetReached) DayFlowOnSurface else DayFlowOnSurfaceVariant.copy(alpha = 0.5f),
+            text = if (isTargetReached) "Target Done" else "Mark Done",
+            color = if (isTargetReached) DayFlowOnSurface else DayFlowOnSurfaceVariant,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium
           )
@@ -326,30 +352,68 @@ fun HabitProgressSheet(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // Delete habit option
+      // Edit & Delete habit options
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .clickable {
-            showDeleteConfirmDialog = true
-          }
-          .padding(vertical = 8.dp)
-          .testTag("delete_habit_button"),
+          .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
       ) {
-        Icon(
-          imageVector = Icons.Default.DeleteOutline,
-          contentDescription = "Delete Habit",
-          tint = DayFlowOnSurfaceVariant.copy(alpha = 0.6f),
-          modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-          text = "Delete Habit",
-          style = MaterialTheme.typography.bodySmall,
-          color = DayFlowOnSurfaceVariant.copy(alpha = 0.6f)
-        )
+        if (onEditHabit != null) {
+          Row(
+            modifier = Modifier
+              .clickable {
+                onDismiss()
+                onEditHabit(habit)
+              }
+              .padding(horizontal = 12.dp, vertical = 4.dp)
+              .testTag("edit_habit_footer_button"),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(
+              imageVector = Icons.Default.Edit,
+              contentDescription = "Edit Habit",
+              tint = DayFlowOnSurfaceVariant.copy(alpha = 0.8f),
+              modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = "Edit Habit",
+              style = MaterialTheme.typography.bodySmall,
+              color = DayFlowOnSurfaceVariant.copy(alpha = 0.8f)
+            )
+          }
+
+          Text(
+            text = "•",
+            color = DayFlowOutlineVariant,
+            modifier = Modifier.padding(horizontal = 4.dp)
+          )
+        }
+
+        Row(
+          modifier = Modifier
+            .clickable {
+              showDeleteConfirmDialog = true
+            }
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .testTag("delete_habit_button"),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Icon(
+            imageVector = Icons.Default.DeleteOutline,
+            contentDescription = "Delete Habit",
+            tint = DayFlowOnSurfaceVariant.copy(alpha = 0.6f),
+            modifier = Modifier.size(16.dp)
+          )
+          Spacer(modifier = Modifier.width(6.dp))
+          Text(
+            text = "Delete Habit",
+            style = MaterialTheme.typography.bodySmall,
+            color = DayFlowOnSurfaceVariant.copy(alpha = 0.6f)
+          )
+        }
       }
 
       Spacer(modifier = Modifier.height(8.dp))
