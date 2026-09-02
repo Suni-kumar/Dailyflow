@@ -102,5 +102,175 @@ class ExampleRobolectricTest {
     assertEquals(100, statsUpdated.completionRate)
     assertEquals(90, statsUpdated.totalFocusMinutes)
   }
+
+  @Test
+  fun `dayflow context builder structures data accurately without leaking private keys`() {
+    val context = com.example.data.ai.AiCoachContext(
+      todayTasks = listOf(
+        com.example.model.TaskItem(id = "1", title = "Write Design Doc", isCompleted = true, estimatedMinutes = 45),
+        com.example.model.TaskItem(id = "2", title = "Review PR", isCompleted = false, estimatedMinutes = 30)
+      ),
+      todayHabits = listOf(
+        com.example.model.HabitItem(id = "h1", title = "Hydration", streakDays = 5, dailyTarget = 8, currentProgress = 8, completedToday = true)
+      ),
+      activeGoals = listOf(
+        com.example.model.GoalItem(id = "g1", title = "Learn Compose", currentProgress = 50, targetProgress = 100, deadline = "30d left")
+      ),
+      summary = com.example.model.DailyProgressSummary(2, 1, 1, 1, 45, 5),
+      selectedDate = "2026-09-02"
+    )
+
+    val structured = com.example.data.ai.DayFlowContextBuilder.buildStructuredContext(context)
+    assertTrue(structured.contains("1 of 2 completed"))
+    assertTrue(structured.contains("Review PR"))
+    assertTrue(structured.contains("Hydration"))
+    assertTrue(structured.contains("Learn Compose"))
+    assertTrue(structured.contains("Habit Streak: 5 days"))
+    assertFalse(structured.contains("apiKey"))
+  }
+
+  @Test
+  fun `ai service produces mindful fallback coaching in English and Hindi`() {
+    val context = com.example.data.ai.AiCoachContext(
+      todayTasks = listOf(
+        com.example.model.TaskItem(id = "1", title = "Deep Work Block", isCompleted = false, estimatedMinutes = 60)
+      ),
+      todayHabits = emptyList(),
+      activeGoals = emptyList(),
+      summary = com.example.model.DailyProgressSummary(1, 0, 0, 0, 0, 3),
+      selectedDate = "2026-09-02"
+    )
+
+    val englishBriefing = com.example.data.ai.DayFlowAiService.generateLocalOfflineCoaching(
+      "Give me a morning briefing",
+      context,
+      com.example.data.local.AiLanguage.ENGLISH
+    )
+    assertTrue(englishBriefing.contains("Deep Work Block"))
+
+    val hindiBriefing = com.example.data.ai.DayFlowAiService.generateLocalOfflineCoaching(
+      "aaj ka plan kya hai",
+      context,
+      com.example.data.local.AiLanguage.HINDI
+    )
+    assertTrue(hindiBriefing.contains("Deep Work Block") || hindiBriefing.contains("tasks"))
+  }
+
+  @Test
+  fun `user preferences manager safely persists and clears gemini api key and language`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val prefsManager = com.example.data.local.UserPreferencesManager(context)
+
+    prefsManager.setGeminiApiKey("AIzaSyFakeKeyTest123")
+    assertEquals("AIzaSyFakeKeyTest123", prefsManager.geminiApiKey.value)
+
+    prefsManager.setAiLanguage(com.example.data.local.AiLanguage.HINDI)
+    assertEquals(com.example.data.local.AiLanguage.HINDI, prefsManager.aiLanguage.value)
+
+    prefsManager.clearGeminiApiKey()
+    assertEquals("", prefsManager.geminiApiKey.value)
+  }
+
+  @Test
+  fun `testConnection returns invalid key when key is empty or blank`() = runBlocking {
+    val result = com.example.data.ai.DayFlowAiService.testConnection("   ")
+    assertTrue(result is com.example.data.ai.ConnectionTestResult.InvalidKey)
+  }
+
+  @Test
+  fun `context builder immediately reflects updated goal progress from 40 percent to 70 percent`() {
+    val initialGoal = com.example.model.GoalItem(
+      id = "g_port",
+      title = "Launch Portfolio Website",
+      currentProgress = 40,
+      targetProgress = 100,
+      unit = "%",
+      deadline = "60d left"
+    )
+
+    val initialContext = com.example.data.ai.AiCoachContext(
+      todayTasks = emptyList(),
+      todayHabits = emptyList(),
+      activeGoals = listOf(initialGoal),
+      summary = com.example.model.DailyProgressSummary(0, 0, 0, 0, 0, 0),
+      selectedDate = "2026-09-02",
+      queryIntent = com.example.data.ai.CoachIntent.GOAL_GUIDANCE
+    )
+
+    val initialOutput = com.example.data.ai.DayFlowContextBuilder.buildStructuredContext(initialContext, "How is my portfolio goal?")
+    assertTrue(initialOutput.contains("Launch Portfolio Website"))
+    assertTrue(initialOutput.contains("40%"))
+    assertFalse(initialOutput.contains("70%"))
+
+    // User updates goal to 70%
+    val updatedGoal = initialGoal.copy(currentProgress = 70)
+    val updatedContext = initialContext.copy(activeGoals = listOf(updatedGoal))
+
+    val updatedOutput = com.example.data.ai.DayFlowContextBuilder.buildStructuredContext(updatedContext, "How is my portfolio goal?")
+    assertTrue(updatedOutput.contains("Launch Portfolio Website"))
+    assertTrue(updatedOutput.contains("70%"))
+    assertFalse(updatedOutput.contains("40%"))
+  }
+
+  @Test
+  fun `context builder immediately reflects task completion and pending status`() {
+    val task = com.example.model.TaskItem(
+      id = "t_audit",
+      title = "Architecture Refactoring",
+      priority = com.example.model.TaskPriority.HIGH,
+      time = "10:00 AM",
+      isCompleted = false,
+      estimatedMinutes = 90
+    )
+
+    val pendingContext = com.example.data.ai.AiCoachContext(
+      todayTasks = listOf(task),
+      todayHabits = emptyList(),
+      activeGoals = emptyList(),
+      summary = com.example.model.DailyProgressSummary(1, 0, 0, 0, 0, 0),
+      selectedDate = "2026-09-02",
+      queryIntent = com.example.data.ai.CoachIntent.DAILY_BRIEFING
+    )
+
+    val pendingOutput = com.example.data.ai.DayFlowContextBuilder.buildStructuredContext(pendingContext, "What should I do today?")
+    assertTrue(pendingOutput.contains("Pending Tasks Remaining: 1 of 1"))
+    assertTrue(pendingOutput.contains("Architecture Refactoring"))
+    assertTrue(pendingOutput.contains("HIGH PRIORITY"))
+
+    // User completes task
+    val completedTask = task.copy(isCompleted = true)
+    val completedContext = pendingContext.copy(
+      todayTasks = listOf(completedTask),
+      summary = com.example.model.DailyProgressSummary(1, 1, 0, 0, 90, 0)
+    )
+
+    val completedOutput = com.example.data.ai.DayFlowContextBuilder.buildStructuredContext(completedContext, "What should I do today?")
+    assertTrue(completedOutput.contains("All planned tasks for today are already completed."))
+  }
+
+  @Test
+  fun `smart intent detector accurately categorizes queries`() {
+    assertEquals(
+      com.example.data.ai.CoachIntent.DAILY_BRIEFING,
+      com.example.data.ai.DayFlowContextBuilder.detectIntent("What should I focus on today?")
+    )
+    assertEquals(
+      com.example.data.ai.CoachIntent.DAILY_BRIEFING,
+      com.example.data.ai.DayFlowContextBuilder.detectIntent("Aaj mujhe kya karna chahiye?")
+    )
+    assertEquals(
+      com.example.data.ai.CoachIntent.DAY_REVIEW,
+      com.example.data.ai.DayFlowContextBuilder.detectIntent("How productive was today?")
+    )
+    assertEquals(
+      com.example.data.ai.CoachIntent.GOAL_GUIDANCE,
+      com.example.data.ai.DayFlowContextBuilder.detectIntent("Which goal needs the most attention?")
+    )
+    assertEquals(
+      com.example.data.ai.CoachIntent.HABIT_STREAK,
+      com.example.data.ai.DayFlowContextBuilder.detectIntent("Meri consistency kaisi hai?")
+    )
+  }
 }
+
 

@@ -1,5 +1,7 @@
 package com.example.model
 
+import androidx.compose.runtime.Immutable
+
 enum class TaskPriority {
   LOW,
   MEDIUM,
@@ -47,6 +49,7 @@ enum class ItemCategory(val displayName: String, val colorHex: Long) {
   }
 }
 
+@Immutable
 data class CustomCategory(
   val id: String,
   val name: String,
@@ -54,6 +57,7 @@ data class CustomCategory(
   val colorHex: Long = 0xFF3B82F6
 )
 
+@Immutable
 data class TaskItem(
   val id: String,
   val title: String,
@@ -67,6 +71,7 @@ data class TaskItem(
   val estimatedMinutes: Int = 30
 )
 
+@Immutable
 data class HabitItem(
   val id: String,
   val title: String,
@@ -83,6 +88,7 @@ data class HabitItem(
     get() = if (dailyTarget > 0) (currentProgress.toFloat() / dailyTarget.toFloat()).coerceIn(0f, 1f) else if (completedToday) 1f else 0f
 }
 
+@Immutable
 data class GoalItem(
   val id: String,
   val title: String,
@@ -103,6 +109,7 @@ data class GoalItem(
     get() = if (targetProgress > 0) (currentProgress.toFloat() / targetProgress.toFloat()).coerceIn(0f, 1f) else 0f
 }
 
+@Immutable
 data class CalendarEventItem(
   val id: String,
   val title: String,
@@ -113,12 +120,24 @@ data class CalendarEventItem(
   val isCompleted: Boolean = false
 )
 
+@Immutable
 data class CoachInsight(
   val id: String,
   val title: String,
   val description: String,
   val type: InsightType = InsightType.ADVICE,
   val timestamp: String = "Just now"
+)
+
+@Immutable
+data class AiChatMessage(
+  val id: String = java.util.UUID.randomUUID().toString(),
+  val text: String,
+  val isUser: Boolean,
+  val timestamp: String = "Just now",
+  val isStreaming: Boolean = false,
+  val isError: Boolean = false,
+  val errorMessage: String? = null
 )
 
 enum class InsightType {
@@ -128,6 +147,7 @@ enum class InsightType {
   PRODUCTIVITY_TIP
 }
 
+@Immutable
 data class DailyProgressSummary(
   val totalTasks: Int,
   val completedTasks: Int,
@@ -146,6 +166,7 @@ enum class StatsTimeRange(val days: Int, val label: String) {
   DAYS_30(30, "30 Days")
 }
 
+@Immutable
 data class DailyActivityStat(
   val dateKey: String,
   val dayLabel: String,
@@ -158,6 +179,7 @@ data class DailyActivityStat(
   val tooltipValue: String = ""
 )
 
+@Immutable
 data class CategoryStat(
   val category: ItemCategory,
   val completedCount: Int,
@@ -165,6 +187,7 @@ data class CategoryStat(
   val percentage: Int
 )
 
+@Immutable
 data class StatisticsData(
   val timeRange: StatsTimeRange = StatsTimeRange.DAYS_7,
   val tasksCompleted: Int = 0,
@@ -181,4 +204,22 @@ data class StatisticsData(
   val categoryStats: List<CategoryStat> = emptyList(),
   val recentStreakDays: List<Boolean> = emptyList(),
   val hasAnyActivity: Boolean = false
+)
+
+@Immutable
+data class AiChatSession(
+  val id: String,
+  val title: String,
+  val createdAt: Long,
+  val updatedAt: Long
+)
+
+@Immutable
+data class AiMemory(
+  val id: String,
+  val text: String,
+  val category: String,
+  val createdAt: Long,
+  val updatedAt: Long,
+  val importance: Int = 1
 )

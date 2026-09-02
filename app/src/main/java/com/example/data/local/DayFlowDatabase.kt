@@ -17,6 +17,11 @@ import com.example.data.local.entity.GoalProgressEntity
 import com.example.data.local.entity.HabitCompletionEntity
 import com.example.data.local.entity.HabitEntity
 import com.example.data.local.entity.TaskEntity
+import com.example.data.local.dao.ai.AiChatDao
+import com.example.data.local.dao.ai.AiMemoryDao
+import com.example.data.local.entity.ai.AiChatMessageEntity
+import com.example.data.local.entity.ai.AiChatSessionEntity
+import com.example.data.local.entity.ai.AiMemoryEntity
 import com.example.model.ItemCategory
 import com.example.model.TaskPriority
 import kotlinx.coroutines.CoroutineScope
@@ -29,9 +34,12 @@ import kotlinx.coroutines.launch
     HabitEntity::class,
     HabitCompletionEntity::class,
     GoalEntity::class,
-    GoalProgressEntity::class
+    GoalProgressEntity::class,
+    AiChatSessionEntity::class,
+    AiChatMessageEntity::class,
+    AiMemoryEntity::class
   ],
-  version = 3,
+  version = 4,
   exportSchema = false
 )
 @TypeConverters(DayFlowConverters::class)
@@ -42,6 +50,8 @@ abstract class DayFlowDatabase : RoomDatabase() {
   abstract fun habitCompletionDao(): HabitCompletionDao
   abstract fun goalDao(): GoalDao
   abstract fun goalProgressDao(): GoalProgressDao
+  abstract fun aiChatDao(): AiChatDao
+  abstract fun aiMemoryDao(): AiMemoryDao
 
   companion object {
     @Volatile

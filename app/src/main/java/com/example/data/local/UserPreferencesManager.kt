@@ -22,6 +22,27 @@ enum class AppThemeMode(val displayName: String) {
   }
 }
 
+enum class AiLanguage(val displayName: String, val instruction: String) {
+  AUTO(
+    "Auto",
+    "Detect the user's language and style naturally. If user writes in English, reply in English. If user writes in Hindi or conversational Hinglish, reply naturally in matching Hindi/Hinglish without awkward or forced translation."
+  ),
+  ENGLISH(
+    "English",
+    "Respond in clear, natural, mindful English."
+  ),
+  HINDI(
+    "Hindi",
+    "Respond in natural Hindi (using clear Hindi or conversational Hinglish as natural for daily productivity)."
+  );
+
+  companion object {
+    fun fromName(name: String?): AiLanguage {
+      return entries.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: AUTO
+    }
+  }
+}
+
 data class NotificationPreferences(
   val isEnabled: Boolean = true,
   val morningBriefing: Boolean = true,
@@ -45,6 +66,21 @@ class UserPreferencesManager(context: Context) {
 
   private val _customCategories = MutableStateFlow(loadCustomCategories())
   val customCategories: StateFlow<List<CustomCategory>> = _customCategories.asStateFlow()
+
+  private val _geminiApiKey = MutableStateFlow(loadGeminiApiKey())
+  val geminiApiKey: StateFlow<String> = _geminiApiKey.asStateFlow()
+
+  private val _aiLanguage = MutableStateFlow(loadAiLanguage())
+  val aiLanguage: StateFlow<AiLanguage> = _aiLanguage.asStateFlow()
+
+  private fun loadGeminiApiKey(): String {
+    return prefs.getString(KEY_GEMINI_API_KEY, "")?.trim().orEmpty()
+  }
+
+  private fun loadAiLanguage(): AiLanguage {
+    val saved = prefs.getString(KEY_AI_LANGUAGE, AiLanguage.AUTO.name)
+    return AiLanguage.fromName(saved)
+  }
 
   private fun loadThemeMode(): AppThemeMode {
     val saved = prefs.getString(KEY_THEME_MODE, AppThemeMode.SYSTEM.name)
@@ -147,10 +183,27 @@ class UserPreferencesManager(context: Context) {
     _notifications.value = _notifications.value.copy(habitReminders = enabled)
   }
 
+  fun setGeminiApiKey(key: String) {
+    val trimmed = key.trim()
+    prefs.edit().putString(KEY_GEMINI_API_KEY, trimmed).apply()
+    _geminiApiKey.value = trimmed
+  }
+
+  fun clearGeminiApiKey() {
+    prefs.edit().remove(KEY_GEMINI_API_KEY).apply()
+    _geminiApiKey.value = ""
+  }
+
+  fun setAiLanguage(language: AiLanguage) {
+    prefs.edit().putString(KEY_AI_LANGUAGE, language.name).apply()
+    _aiLanguage.value = language
+  }
+
   fun exportToJson(): JSONObject {
     val json = JSONObject()
     json.put("themeMode", _themeMode.value.name)
     json.put("accentColor", _accentColor.value.id)
+    json.put("aiLanguage", _aiLanguage.value.name)
     val notifObj = JSONObject()
     notifObj.put("isEnabled", _notifications.value.isEnabled)
     notifObj.put("morningBriefing", _notifications.value.morningBriefing)
@@ -179,6 +232,10 @@ class UserPreferencesManager(context: Context) {
     if (json.has("accentColor")) {
       val accentId = json.optString("accentColor")
       setAccentColor(DayFlowAccent.fromId(accentId))
+    }
+    if (json.has("aiLanguage")) {
+      val langName = json.optString("aiLanguage")
+      setAiLanguage(AiLanguage.fromName(langName))
     }
     if (json.has("notifications")) {
       val notifObj = json.optJSONObject("notifications")
@@ -221,6 +278,8 @@ class UserPreferencesManager(context: Context) {
     private const val KEY_EVENING_REVIEW = "key_evening_review"
     private const val KEY_HABIT_REMINDERS = "key_habit_reminders"
     private const val KEY_CUSTOM_CATEGORIES = "key_custom_categories"
+    private const val KEY_GEMINI_API_KEY = "key_gemini_api_key"
+    private const val KEY_AI_LANGUAGE = "key_ai_language"
   }
 }
 

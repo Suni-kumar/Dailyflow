@@ -24,12 +24,31 @@ data class CalendarGridCell(
 )
 
 object DateUtils {
-  private val isoFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-  private val dayOfWeekFormat = SimpleDateFormat("EEE", Locale.US)
-  private val dayNumberFormat = SimpleDateFormat("d", Locale.US)
-  private val displayFormat = SimpleDateFormat("MMMM d", Locale.US)
-  private val monthYearFormat = SimpleDateFormat("MMMM yyyy", Locale.US)
-  private val scheduleHeaderFormat = SimpleDateFormat("MMM d", Locale.US)
+  private val isoFormatThreadLocal = ThreadLocal.withInitial { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+  private val dayOfWeekFormatThreadLocal = ThreadLocal.withInitial { SimpleDateFormat("EEE", Locale.US) }
+  private val dayNumberFormatThreadLocal = ThreadLocal.withInitial { SimpleDateFormat("d", Locale.US) }
+  private val displayFormatThreadLocal = ThreadLocal.withInitial { SimpleDateFormat("MMMM d", Locale.US) }
+  private val monthYearFormatThreadLocal = ThreadLocal.withInitial { SimpleDateFormat("MMMM yyyy", Locale.US) }
+  private val scheduleHeaderFormatThreadLocal = ThreadLocal.withInitial { SimpleDateFormat("MMM d", Locale.US) }
+  private val timeFormatThreadLocal = ThreadLocal.withInitial { SimpleDateFormat("hh:mm a", Locale.US) }
+  private val fullDateTimeFormatThreadLocal = ThreadLocal.withInitial { SimpleDateFormat("EEEE, MMMM d, yyyy 'at' hh:mm a", Locale.US) }
+
+  private val isoFormat: SimpleDateFormat get() = isoFormatThreadLocal.get()!!
+  private val dayOfWeekFormat: SimpleDateFormat get() = dayOfWeekFormatThreadLocal.get()!!
+  private val dayNumberFormat: SimpleDateFormat get() = dayNumberFormatThreadLocal.get()!!
+  private val displayFormat: SimpleDateFormat get() = displayFormatThreadLocal.get()!!
+  private val monthYearFormat: SimpleDateFormat get() = monthYearFormatThreadLocal.get()!!
+  private val scheduleHeaderFormat: SimpleDateFormat get() = scheduleHeaderFormatThreadLocal.get()!!
+  private val timeFormat: SimpleDateFormat get() = timeFormatThreadLocal.get()!!
+  private val fullDateTimeFormat: SimpleDateFormat get() = fullDateTimeFormatThreadLocal.get()!!
+
+  fun getCurrentTimeFormatted(): String {
+    return timeFormat.format(Date())
+  }
+
+  fun getFullCurrentDateTimeString(): String {
+    return fullDateTimeFormat.format(Date())
+  }
 
   fun getTodayDateKey(): String {
     return isoFormat.format(Date())
@@ -51,7 +70,7 @@ object DateUtils {
     calendar.firstDayOfWeek = Calendar.MONDAY
     calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
 
-    val days = mutableListOf<DayFlowDateItem>()
+    val days = ArrayList<DayFlowDateItem>(7)
     for (i in 0 until 7) {
       val date = calendar.time
       val dateKey = isoFormat.format(date)
@@ -144,7 +163,7 @@ object DateUtils {
 
     val leadingDaysCount = firstDayOfWeek - Calendar.SUNDAY // 0 if starts on Sunday
 
-    val allCells = mutableListOf<CalendarGridCell>()
+    val allCells = ArrayList<CalendarGridCell>(42)
 
     // 1. Leading days from previous month
     for (i in (daysInPrevMonth - leadingDaysCount + 1)..daysInPrevMonth) {
@@ -257,7 +276,7 @@ object DateUtils {
 
   fun getLastNDaysKeys(n: Int): List<String> {
     val cal = Calendar.getInstance()
-    val list = mutableListOf<String>()
+    val list = ArrayList<String>(n)
     for (i in 0 until n) {
       list.add(isoFormat.format(cal.time))
       cal.add(Calendar.DAY_OF_MONTH, -1)
@@ -317,8 +336,6 @@ object DateUtils {
   /**
    * Dynamically calculates current streak and best streak from the set of active completed dates.
    * A streak is counted on consecutive calendar days.
-   * If today is completed, current streak counts backwards from today.
-   * If today is not completed yet, current streak counts backwards from yesterday.
    */
   fun calculateStreak(completedDates: Set<String>, todayKey: String = getTodayDateKey()): Pair<Int, Int> {
     if (completedDates.isEmpty()) return Pair(0, 0)
@@ -350,35 +367,29 @@ object DateUtils {
       }
     }
 
-    // 2. Calculate all-time best streak across sorted unique completed dates
+    // 2. Calculate all-time best streak
     val sortedDates = completedDates.mapNotNull { parseDate(it) }.sorted()
     var maxStreak = 0
     var runningStreak = 0
-    var lastDateCal: Calendar? = null
+    var lastTimeMillis: Long = -1L
+    val oneDayMillis = 24 * 60 * 60 * 1000L
 
     for (date in sortedDates) {
-      val currentCal = Calendar.getInstance()
-      currentCal.time = date
-      currentCal.set(Calendar.HOUR_OF_DAY, 0)
-      currentCal.set(Calendar.MINUTE, 0)
-      currentCal.set(Calendar.SECOND, 0)
-      currentCal.set(Calendar.MILLISECOND, 0)
-
-      if (lastDateCal == null) {
+      val timeMillis = date.time
+      if (lastTimeMillis == -1L) {
         runningStreak = 1
       } else {
-        val diffMillis = currentCal.timeInMillis - lastDateCal.timeInMillis
-        val dayDiff = (diffMillis / (1000 * 60 * 60 * 24)).toInt()
-        if (dayDiff == 1) {
+        val diffDays = Math.round((timeMillis - lastTimeMillis).toDouble() / oneDayMillis).toInt()
+        if (diffDays == 1) {
           runningStreak++
-        } else if (dayDiff > 1) {
+        } else if (diffDays > 1) {
           runningStreak = 1
         }
       }
       if (runningStreak > maxStreak) {
         maxStreak = runningStreak
       }
-      lastDateCal = currentCal
+      lastTimeMillis = timeMillis
     }
 
     val bestStreak = maxOf(maxStreak, currentStreak)

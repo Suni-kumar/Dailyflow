@@ -18,13 +18,16 @@ import com.example.model.StatsTimeRange
 import com.example.model.TaskItem
 import com.example.model.TaskPriority
 import com.example.util.DateUtils
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -128,7 +131,8 @@ class DayFlowViewModel(
       focusMinutes = focusMins,
       currentStreak = maxStreak
     )
-  }.stateIn(
+  }.flowOn(Dispatchers.Default)
+  .stateIn(
     scope = viewModelScope,
     started = SharingStarted.WhileSubscribed(5000),
     initialValue = DailyProgressSummary(0, 0, 0, 0, 0, 0)
@@ -151,7 +155,8 @@ class DayFlowViewModel(
     goals
   ) { range: StatsTimeRange, taskList: List<TaskItem>, habitList: List<HabitItem>, goalList: List<GoalItem> ->
     repository.calculateStatistics(range, taskList, habitList, goalList)
-  }.stateIn(
+  }.flowOn(Dispatchers.Default)
+  .stateIn(
     scope = viewModelScope,
     started = SharingStarted.WhileSubscribed(5000),
     initialValue = StatisticsData()
@@ -387,6 +392,18 @@ class DayFlowViewModel(
   val notifications: StateFlow<com.example.data.local.NotificationPreferences> = preferencesManager?.notifications
     ?: MutableStateFlow(com.example.data.local.NotificationPreferences()).asStateFlow()
 
+  val geminiApiKey: StateFlow<String> = preferencesManager?.geminiApiKey
+    ?: MutableStateFlow("").asStateFlow()
+
+  val aiLanguage: StateFlow<com.example.data.local.AiLanguage> = preferencesManager?.aiLanguage
+    ?: MutableStateFlow(com.example.data.local.AiLanguage.AUTO).asStateFlow()
+
+  private val _testConnectionResult = MutableStateFlow<com.example.data.ai.ConnectionTestResult?>(null)
+  val testConnectionResult: StateFlow<com.example.data.ai.ConnectionTestResult?> = _testConnectionResult.asStateFlow()
+
+  private val _isTestingConnection = MutableStateFlow(false)
+  val isTestingConnection: StateFlow<Boolean> = _isTestingConnection.asStateFlow()
+
   fun setThemeMode(mode: com.example.data.local.AppThemeMode) {
     preferencesManager?.setThemeMode(mode)
   }
@@ -411,6 +428,35 @@ class DayFlowViewModel(
     preferencesManager?.setHabitReminders(enabled)
   }
 
+  fun setGeminiApiKey(key: String) {
+    preferencesManager?.setGeminiApiKey(key)
+    _testConnectionResult.value = null
+  }
+
+  fun clearGeminiApiKey() {
+    preferencesManager?.clearGeminiApiKey()
+    _testConnectionResult.value = null
+  }
+
+  fun setAiLanguage(language: com.example.data.local.AiLanguage) {
+    preferencesManager?.setAiLanguage(language)
+  }
+
+  fun testGeminiConnection(keyToTest: String? = null) {
+    val key = keyToTest ?: geminiApiKey.value
+    viewModelScope.launch {
+      _isTestingConnection.value = true
+      _testConnectionResult.value = null
+      val result = com.example.data.ai.DayFlowAiService.testConnection(key)
+      _testConnectionResult.value = result
+      _isTestingConnection.value = false
+    }
+  }
+
+  fun clearTestConnectionResult() {
+    _testConnectionResult.value = null
+  }
+
   // Backup & Restore
   suspend fun exportBackupJson(): String {
     return repository.exportBackupJson()
@@ -420,76 +466,300 @@ class DayFlowViewModel(
     return repository.importBackupJson(jsonString)
   }
 
-  // AI Coach Chat
-  private val _aiChatMessages = MutableStateFlow<List<Pair<String, Boolean>>>(emptyList())
-  val aiChatMessages: StateFlow<List<Pair<String, Boolean>>> = _aiChatMessages.asStateFlow()
+  // AI Coach Chat (Phase 1 Multi-turn with Real Streaming)
+  private val _aiChatMessages = MutableStateFlow<List<com.example.model.AiChatMessage>>(emptyList())
+  val aiChatMessages: StateFlow<List<com.example.model.AiChatMessage>> = _aiChatMessages.asStateFlow()
+
+  val aiChatSessions: StateFlow<List<com.example.model.AiChatSession>> = repository.getAllChatSessions()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  val aiMemories: StateFlow<List<com.example.model.AiMemory>> = repository.getAllMemories()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  private val _currentSessionId = MutableStateFlow<String?>(null)
+  val currentSessionId: StateFlow<String?> = _currentSessionId.asStateFlow()
 
   private val _isAiThinking = MutableStateFlow(false)
   val isAiThinking: StateFlow<Boolean> = _isAiThinking.asStateFlow()
 
+  private var activeAiJob: kotlinx.coroutines.Job? = null
+
   fun sendCoachPrompt(prompt: String) {
-    if (prompt.isBlank()) return
+    if (prompt.isBlank() || _isAiThinking.value) return
     val userText = prompt.trim()
-    _aiChatMessages.value = _aiChatMessages.value + (userText to true)
+    
+    // Simple local explicit memory detection
+    val lowerText = userText.lowercase()
+    if (lowerText.startsWith("remember that ") || lowerText.startsWith("remember to ") || lowerText.startsWith("please remember ")) {
+      val memoryText = userText.replace(Regex("^(please )?remember (that|to) ", RegexOption.IGNORE_CASE), "").trim()
+      if (memoryText.isNotBlank()) {
+        explicitRemember(memoryText)
+      }
+    }
+
+    val userMsg = com.example.model.AiChatMessage(
+      text = userText,
+      isUser = true,
+      timestamp = "Just now"
+    )
 
     viewModelScope.launch {
-      _isAiThinking.value = true
-      val context = com.example.data.ai.AiCoachContext(
-        todayTasks = todayTasks.value,
-        todayHabits = todayHabits.value,
-        activeGoals = goals.value,
-        summary = progressSummary.value,
-        selectedDate = _selectedTodayDate.value
-      )
-
-      val response = com.example.data.ai.DayFlowAiService.generateCoachResponse(
-        actionType = com.example.data.ai.CoachActionType.ASK_AI,
-        userQuery = userText,
-        context = context
-      )
-
-      _aiChatMessages.value = _aiChatMessages.value + (response to false)
-      _isAiThinking.value = false
-
-      val newInsight = CoachInsight(
-        id = UUID.randomUUID().toString(),
-        title = "AI Reflection & Advice",
-        description = response,
-        type = InsightType.ADVICE,
-        timestamp = "Just now"
-      )
-      repository.addCoachInsight(newInsight)
+      var sessionId = _currentSessionId.value
+      if (sessionId == null) {
+        sessionId = UUID.randomUUID().toString()
+        _currentSessionId.value = sessionId
+        val title = if (userText.length > 25) userText.take(25) + "..." else userText
+        val newSession = com.example.model.AiChatSession(
+          id = sessionId,
+          title = title,
+          createdAt = System.currentTimeMillis(),
+          updatedAt = System.currentTimeMillis()
+        )
+        repository.insertOrUpdateSession(newSession)
+      } else {
+        repository.updateSessionTimestamp(sessionId)
+      }
+      repository.insertMessage(sessionId, userMsg)
     }
+
+    val currentHistory = _aiChatMessages.value + userMsg
+    val assistantMsgId = UUID.randomUUID().toString()
+    val assistantMsgPlaceholder = com.example.model.AiChatMessage(
+      id = assistantMsgId,
+      text = "",
+      isUser = false,
+      timestamp = "Just now",
+      isStreaming = true
+    )
+
+    _aiChatMessages.value = currentHistory + assistantMsgPlaceholder
+    _isAiThinking.value = true
+
+    executeStreamingPrompt(
+      history = currentHistory,
+      assistantMsgId = assistantMsgId
+    )
   }
 
   fun triggerCoachAction(actionType: com.example.data.ai.CoachActionType) {
-    val actionLabel = when (actionType) {
-      com.example.data.ai.CoachActionType.DAILY_BRIEFING -> "Give me a daily briefing"
-      com.example.data.ai.CoachActionType.DAY_REVIEW -> "Review my progress today"
-      com.example.data.ai.CoachActionType.GOAL_GUIDANCE -> "Provide guidance on my active goals"
-      com.example.data.ai.CoachActionType.ASK_AI -> "Summary analysis"
+    if (_isAiThinking.value) return
+    val actionPrompt = when (actionType) {
+      com.example.data.ai.CoachActionType.DAILY_BRIEFING -> "Please give me a calm and actionable daily briefing analyzing today's scheduled tasks, active habits, and priority focus areas."
+      com.example.data.ai.CoachActionType.DAY_REVIEW -> "Let's review my progress today: what tasks were completed, what remains unfinished, habit consistency, and mindful reflections for tomorrow."
+      com.example.data.ai.CoachActionType.GOAL_GUIDANCE -> "Analyze my active goals, current progress, deadlines, and suggest practical next actions to move them forward."
+      com.example.data.ai.CoachActionType.ASK_AI -> "How is my day looking so far?"
     }
 
-    _aiChatMessages.value = _aiChatMessages.value + (actionLabel to true)
+    sendCoachPrompt(actionPrompt)
+  }
 
-    viewModelScope.launch {
-      _isAiThinking.value = true
+  private fun executeStreamingPrompt(
+    history: List<com.example.model.AiChatMessage>,
+    assistantMsgId: String
+  ) {
+    activeAiJob?.cancel()
+    activeAiJob = viewModelScope.launch {
+      val latestUserPrompt = history.lastOrNull { it.isUser }?.text.orEmpty()
       val context = com.example.data.ai.AiCoachContext(
         todayTasks = todayTasks.value,
         todayHabits = todayHabits.value,
         activeGoals = goals.value,
         summary = progressSummary.value,
-        selectedDate = _selectedTodayDate.value
+        selectedDate = _selectedTodayDate.value,
+        statisticsData = statisticsData.value,
+        currentDateTimeString = com.example.util.DateUtils.getFullCurrentDateTimeString(),
+        queryIntent = com.example.data.ai.DayFlowContextBuilder.detectIntent(latestUserPrompt),
+        memories = aiMemories.value
       )
 
-      val response = com.example.data.ai.DayFlowAiService.generateCoachResponse(
-        actionType = actionType,
-        userQuery = "",
-        context = context
-      )
+      val accumulatedResponse = StringBuilder()
 
-      _aiChatMessages.value = _aiChatMessages.value + (response to false)
-      _isAiThinking.value = false
+      try {
+        val finalResponse = com.example.data.ai.DayFlowAiService.streamCoachResponse(
+          conversationHistory = history,
+          context = context,
+          language = aiLanguage.value,
+          userApiKey = geminiApiKey.value,
+          onChunk = { chunk ->
+            accumulatedResponse.append(chunk)
+            updateAssistantMessage(assistantMsgId, accumulatedResponse.toString(), isStreaming = true)
+          }
+        )
+
+        val finalText = if (accumulatedResponse.isNotEmpty()) accumulatedResponse.toString() else finalResponse
+        updateAssistantMessage(
+          assistantMsgId = assistantMsgId,
+          text = finalText,
+          isStreaming = false
+        )
+
+        // Save final message to DB
+        _currentSessionId.value?.let { sid ->
+          val msgToSave = _aiChatMessages.value.find { it.id == assistantMsgId }
+          if (msgToSave != null && !msgToSave.isError) {
+            repository.insertMessage(sid, msgToSave)
+            repository.updateSessionTimestamp(sid)
+          }
+        }
+
+        // Add dynamic insight for major reflections
+        val insightTitle = if (history.lastOrNull()?.text?.contains("briefing", ignoreCase = true) == true) {
+          "Morning Briefing Reflection"
+        } else if (history.lastOrNull()?.text?.contains("review", ignoreCase = true) == true) {
+          "Evening Review Reflection"
+        } else {
+          "AI Mindful Coaching"
+        }
+
+        val newInsight = CoachInsight(
+          id = UUID.randomUUID().toString(),
+          title = insightTitle,
+          description = finalResponse.take(180),
+          type = InsightType.ADVICE,
+          timestamp = "Today"
+        )
+        repository.addCoachInsight(newInsight)
+      } catch (e: kotlinx.coroutines.CancellationException) {
+        // User stopped generation
+        val currentText = accumulatedResponse.toString()
+        if (currentText.isNotBlank()) {
+          updateAssistantMessage(assistantMsgId, currentText, isStreaming = false)
+          _currentSessionId.value?.let { sid ->
+            val msgToSave = _aiChatMessages.value.find { it.id == assistantMsgId }
+            if (msgToSave != null) repository.insertMessage(sid, msgToSave)
+          }
+        } else {
+          _aiChatMessages.value = _aiChatMessages.value.filter { it.id != assistantMsgId }
+        }
+      } catch (e: Exception) {
+        updateAssistantMessage(
+          assistantMsgId = assistantMsgId,
+          text = accumulatedResponse.toString(),
+          isStreaming = false,
+          isError = true,
+          errorMessage = e.message ?: "Failed to generate response."
+        )
+      } finally {
+        _isAiThinking.value = false
+      }
     }
+  }
+
+  private fun updateAssistantMessage(
+    assistantMsgId: String,
+    text: String,
+    isStreaming: Boolean,
+    isError: Boolean = false,
+    errorMessage: String? = null
+  ) {
+    _aiChatMessages.value = _aiChatMessages.value.map { msg ->
+      if (msg.id == assistantMsgId) {
+        msg.copy(
+          text = text,
+          isStreaming = isStreaming,
+          isError = isError,
+          errorMessage = errorMessage
+        )
+      } else {
+        msg
+      }
+    }
+  }
+
+  fun stopAiGeneration() {
+    activeAiJob?.cancel()
+    activeAiJob = null
+    _isAiThinking.value = false
+    _aiChatMessages.value = _aiChatMessages.value.map {
+      if (it.isStreaming) it.copy(isStreaming = false) else it
+    }
+  }
+
+  fun retryLastAiMessage() {
+    val messages = _aiChatMessages.value
+    if (messages.isEmpty()) return
+    val lastUserMsgIndex = messages.indexOfLast { it.isUser }
+    if (lastUserMsgIndex >= 0) {
+      val userPrompt = messages[lastUserMsgIndex].text
+      // Remove failed assistant turn and subsequent messages
+      _aiChatMessages.value = messages.take(lastUserMsgIndex)
+      sendCoachPrompt(userPrompt)
+    }
+  }
+
+  fun regenerateLastAiMessage() {
+    val messages = _aiChatMessages.value
+    if (messages.isEmpty()) return
+    val lastUserMsgIndex = messages.indexOfLast { it.isUser }
+    if (lastUserMsgIndex >= 0) {
+      val userPrompt = messages[lastUserMsgIndex].text
+      _aiChatMessages.value = messages.take(lastUserMsgIndex)
+      sendCoachPrompt(userPrompt)
+    }
+  }
+
+  fun createNewChatSession() {
+    stopAiGeneration()
+    _aiChatMessages.value = emptyList()
+    _currentSessionId.value = null
+  }
+
+  fun loadChatSession(sessionId: String) {
+    stopAiGeneration()
+    _currentSessionId.value = sessionId
+    viewModelScope.launch {
+      val msgs = repository.getMessagesForSession(sessionId).first()
+      if (_currentSessionId.value == sessionId) {
+        _aiChatMessages.value = msgs
+      }
+    }
+  }
+
+  fun deleteChatSession(sessionId: String) {
+    viewModelScope.launch {
+      repository.deleteSession(sessionId)
+      if (_currentSessionId.value == sessionId) {
+        createNewChatSession()
+      }
+    }
+  }
+
+  fun clearAllChatHistory() {
+    viewModelScope.launch {
+      repository.clearAllChatHistory()
+      createNewChatSession()
+    }
+  }
+
+  // AI Memory Management
+  fun explicitRemember(text: String) {
+    viewModelScope.launch {
+      val memory = com.example.model.AiMemory(
+        id = UUID.randomUUID().toString(),
+        text = text,
+        category = "Preference",
+        createdAt = System.currentTimeMillis(),
+        updatedAt = System.currentTimeMillis()
+      )
+      repository.insertMemory(memory)
+    }
+  }
+
+  fun deleteMemory(memoryId: String) {
+    viewModelScope.launch {
+      repository.deleteMemory(memoryId)
+    }
+  }
+
+  fun clearAllMemories() {
+    viewModelScope.launch {
+      repository.clearAllMemories()
+    }
+  }
+
+  fun clearAiChatSession() {
+    stopAiGeneration()
+    _aiChatMessages.value = emptyList()
+    _currentSessionId.value = null
   }
 }

@@ -11,6 +11,9 @@ import com.example.data.local.entity.GoalProgressEntity
 import com.example.data.local.entity.HabitCompletionEntity
 import com.example.data.local.entity.HabitEntity
 import com.example.data.local.entity.TaskEntity
+import com.example.model.AiChatMessage
+import com.example.model.AiChatSession
+import com.example.model.AiMemory
 import com.example.model.CalendarEventItem
 import com.example.model.CategoryStat
 import com.example.model.CoachInsight
@@ -35,6 +38,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -47,6 +51,8 @@ class DayFlowRepository(
   private val habitCompletionDao: HabitCompletionDao? = null,
   private val goalDao: GoalDao? = null,
   private val goalProgressDao: GoalProgressDao? = null,
+  private val aiChatDao: com.example.data.local.dao.ai.AiChatDao? = null,
+  private val aiMemoryDao: com.example.data.local.dao.ai.AiMemoryDao? = null,
   private val database: DayFlowDatabase? = null,
   private val preferencesManager: com.example.data.local.UserPreferencesManager? = null,
   private val coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.IO)
@@ -178,6 +184,7 @@ class DayFlowRepository(
   val tasks: StateFlow<List<TaskItem>> = if (taskDao != null) {
     taskDao.getAllTasks()
       .map { list -> list.map { it.toTaskItem() } }
+      .flowOn(Dispatchers.Default)
       .stateIn(
         scope = coroutineScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -189,16 +196,10 @@ class DayFlowRepository(
 
   // Get tasks filtered by specific date
   fun getTasksForDate(date: String): Flow<List<TaskItem>> {
-    return if (taskDao != null) {
-      taskDao.getAllTasks().map { list ->
-        list.filter { it.dueDate == date || (date == com.example.util.DateUtils.getTodayDateKey() && it.dueDate == "Today") }
-          .map { it.toTaskItem() }
-      }
-    } else {
-      _inMemoryTasks.map { list ->
-        list.filter { it.dueDate == date || (date == com.example.util.DateUtils.getTodayDateKey() && it.dueDate == "Today") }
-      }
-    }
+    return tasks.map { list ->
+      val todayKey = com.example.util.DateUtils.getTodayDateKey()
+      list.filter { it.dueDate == date || (date == todayKey && it.dueDate == "Today") }
+    }.flowOn(Dispatchers.Default)
   }
 
   // Reactive habits stream for a given date
@@ -215,7 +216,7 @@ class DayFlowRepository(
           val isDone = completion?.isCompleted ?: (progress >= entity.dailyTarget && entity.dailyTarget > 0)
           entity.toHabitItem(currentProgress = progress, isCompletedToday = isDone)
         }
-      }
+      }.flowOn(Dispatchers.Default)
     } else {
       _inMemoryHabits.asStateFlow()
     }
@@ -233,6 +234,7 @@ class DayFlowRepository(
   val goals: StateFlow<List<GoalItem>> = if (goalDao != null) {
     goalDao.getAllGoals()
       .map { list -> list.map { it.toGoalItem() } }
+      .flowOn(Dispatchers.Default)
       .stateIn(
         scope = coroutineScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -255,7 +257,8 @@ class DayFlowRepository(
         isCompleted = task.isCompleted
       )
     }
-  }.stateIn(
+  }.flowOn(Dispatchers.Default)
+  .stateIn(
     scope = coroutineScope,
     started = SharingStarted.WhileSubscribed(5000),
     initialValue = emptyList()
@@ -819,6 +822,68 @@ class DayFlowRepository(
 
   fun getPreferencesManager(): com.example.data.local.UserPreferencesManager? = preferencesManager
 
+  // --- AI Chat History ---
+  fun getAllChatSessions(): Flow<List<AiChatSession>> {
+    return aiChatDao?.getAllSessions()?.map { list -> list.map { it.toAiChatSession() } } ?: flowOf(emptyList())
+  }
+
+  suspend fun getSessionById(sessionId: String): AiChatSession? = withContext(Dispatchers.IO) {
+    aiChatDao?.getSessionById(sessionId)?.toAiChatSession()
+  }
+
+  suspend fun insertOrUpdateSession(session: AiChatSession) = withContext(Dispatchers.IO) {
+    aiChatDao?.insertSession(session.toEntity())
+  }
+  
+  suspend fun updateSessionTitle(sessionId: String, title: String) = withContext(Dispatchers.IO) {
+    aiChatDao?.updateSessionTitle(sessionId, title, System.currentTimeMillis())
+  }
+  
+  suspend fun updateSessionTimestamp(sessionId: String) = withContext(Dispatchers.IO) {
+    aiChatDao?.updateSessionTimestamp(sessionId, System.currentTimeMillis())
+  }
+
+  suspend fun deleteSession(sessionId: String) = withContext(Dispatchers.IO) {
+    aiChatDao?.deleteSession(sessionId)
+  }
+
+  suspend fun clearAllChatHistory() = withContext(Dispatchers.IO) {
+    aiChatDao?.clearHistory()
+  }
+
+  fun getMessagesForSession(sessionId: String): Flow<List<AiChatMessage>> {
+    return aiChatDao?.getMessagesForSession(sessionId)?.map { list -> list.map { it.toAiChatMessage() } } ?: flowOf(emptyList())
+  }
+
+  suspend fun insertMessage(sessionId: String, message: AiChatMessage) = withContext(Dispatchers.IO) {
+    aiChatDao?.insertMessage(message.toEntity(sessionId))
+  }
+  
+  suspend fun insertMessages(sessionId: String, messages: List<AiChatMessage>) = withContext(Dispatchers.IO) {
+    aiChatDao?.insertMessages(messages.map { it.toEntity(sessionId) })
+  }
+
+  // --- AI Memory ---
+  fun getAllMemories(): Flow<List<AiMemory>> {
+    return aiMemoryDao?.getAllMemories()?.map { list -> list.map { it.toAiMemory() } } ?: flowOf(emptyList())
+  }
+  
+  suspend fun getAllMemoriesSync(): List<AiMemory> = withContext(Dispatchers.IO) {
+    aiMemoryDao?.getAllMemoriesSync()?.map { it.toAiMemory() } ?: emptyList()
+  }
+
+  suspend fun insertMemory(memory: AiMemory) = withContext(Dispatchers.IO) {
+    aiMemoryDao?.insertMemory(memory.toEntity())
+  }
+
+  suspend fun deleteMemory(memoryId: String) = withContext(Dispatchers.IO) {
+    aiMemoryDao?.deleteMemory(memoryId)
+  }
+
+  suspend fun clearAllMemories() = withContext(Dispatchers.IO) {
+    aiMemoryDao?.clearAllMemories()
+  }
+
   companion object {
     fun fromDatabase(
       database: DayFlowDatabase,
@@ -831,6 +896,8 @@ class DayFlowRepository(
         habitCompletionDao = database.habitCompletionDao(),
         goalDao = database.goalDao(),
         goalProgressDao = database.goalProgressDao(),
+        aiChatDao = database.aiChatDao(),
+        aiMemoryDao = database.aiMemoryDao(),
         database = database,
         preferencesManager = preferencesManager,
         coroutineScope = scope
@@ -958,3 +1025,64 @@ fun GoalItem.toEntity(): GoalEntity {
     createdAt = createdAt
   )
 }
+
+fun com.example.data.local.entity.ai.AiChatSessionEntity.toAiChatSession(): com.example.model.AiChatSession {
+  return com.example.model.AiChatSession(
+    id = id,
+    title = title,
+    createdAt = createdAt,
+    updatedAt = updatedAt
+  )
+}
+
+fun com.example.model.AiChatSession.toEntity(): com.example.data.local.entity.ai.AiChatSessionEntity {
+  return com.example.data.local.entity.ai.AiChatSessionEntity(
+    id = id,
+    title = title,
+    createdAt = createdAt,
+    updatedAt = updatedAt
+  )
+}
+
+fun com.example.data.local.entity.ai.AiChatMessageEntity.toAiChatMessage(): com.example.model.AiChatMessage {
+  return com.example.model.AiChatMessage(
+    id = id,
+    text = text,
+    isUser = isUser,
+    timestamp = timestamp
+  )
+}
+
+fun com.example.model.AiChatMessage.toEntity(sessionId: String, createdAt: Long = System.currentTimeMillis()): com.example.data.local.entity.ai.AiChatMessageEntity {
+  return com.example.data.local.entity.ai.AiChatMessageEntity(
+    id = id,
+    sessionId = sessionId,
+    text = text,
+    isUser = isUser,
+    timestamp = timestamp,
+    createdAt = createdAt
+  )
+}
+
+fun com.example.data.local.entity.ai.AiMemoryEntity.toAiMemory(): com.example.model.AiMemory {
+  return com.example.model.AiMemory(
+    id = id,
+    text = text,
+    category = category,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+    importance = importance
+  )
+}
+
+fun com.example.model.AiMemory.toEntity(): com.example.data.local.entity.ai.AiMemoryEntity {
+  return com.example.data.local.entity.ai.AiMemoryEntity(
+    id = id,
+    text = text,
+    category = category,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+    importance = importance
+  )
+}
+

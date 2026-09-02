@@ -69,31 +69,13 @@ fun DayFlowApp(
   val navBackStackEntry by navController.currentBackStackEntryAsState()
   val currentRoute = navBackStackEntry?.destination?.route ?: DayFlowDestination.Today.route
 
-  val todayTasks by viewModel.todayTasks.collectAsStateWithLifecycle()
-  val todayHabits by viewModel.todayHabits.collectAsStateWithLifecycle()
-  val allTasks by viewModel.allTasks.collectAsStateWithLifecycle()
-  val allHabits by viewModel.allHabits.collectAsStateWithLifecycle()
-  val goals by viewModel.goals.collectAsStateWithLifecycle()
-  val calendarEvents by viewModel.calendarEvents.collectAsStateWithLifecycle()
-  val coachInsights by viewModel.coachInsights.collectAsStateWithLifecycle()
   val summary by viewModel.progressSummary.collectAsStateWithLifecycle()
   val selectedTodayDate by viewModel.selectedTodayDate.collectAsStateWithLifecycle()
-  val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
+  val selectedCalendarDate by viewModel.selectedCalendarDate.collectAsStateWithLifecycle()
   val isAddTaskSheetOpen by viewModel.isAddTaskSheetOpen.collectAsStateWithLifecycle()
   val editingTask by viewModel.editingTask.collectAsStateWithLifecycle()
   val isAddHabitSheetOpen by viewModel.isAddHabitSheetOpen.collectAsStateWithLifecycle()
   val habitForProgressSheet by viewModel.habitForProgressSheet.collectAsStateWithLifecycle()
-  val selectedCalendarDate by viewModel.selectedCalendarDate.collectAsStateWithLifecycle()
-  val calendarTasks by viewModel.calendarTasks.collectAsStateWithLifecycle()
-  val calendarYear by viewModel.calendarYear.collectAsStateWithLifecycle()
-  val calendarMonth by viewModel.calendarMonth.collectAsStateWithLifecycle()
-  val statisticsData by viewModel.statisticsData.collectAsStateWithLifecycle()
-  val statsTimeRange by viewModel.statsTimeRange.collectAsStateWithLifecycle()
-  val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
-  val accentColor by viewModel.accentColor.collectAsStateWithLifecycle()
-  val notifications by viewModel.notifications.collectAsStateWithLifecycle()
-  val aiChatMessages by viewModel.aiChatMessages.collectAsStateWithLifecycle()
-  val isAiThinking by viewModel.isAiThinking.collectAsStateWithLifecycle()
   val customCategories by viewModel.customCategories.collectAsStateWithLifecycle()
 
   val isSettingsOrAccent = currentRoute == DayFlowDestination.Settings.route || currentRoute == DayFlowDestination.AccentColor.route
@@ -174,11 +156,16 @@ fun DayFlowApp(
         .padding(innerPadding)
     ) {
       composable(DayFlowDestination.Today.route) {
+        val todayTasks by viewModel.todayTasks.collectAsStateWithLifecycle()
+        val todayHabits by viewModel.todayHabits.collectAsStateWithLifecycle()
+        val selectedDate by viewModel.selectedTodayDate.collectAsStateWithLifecycle()
+        val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
+
         TodayScreen(
           tasks = todayTasks,
           habits = todayHabits,
           summary = summary,
-          selectedDate = selectedTodayDate,
+          selectedDate = selectedDate,
           onSelectDate = { viewModel.selectTodayDate(it) },
           selectedCategory = selectedCategory,
           onToggleTask = { viewModel.toggleTask(it) },
@@ -188,15 +175,21 @@ fun DayFlowApp(
           onOpenHabitProgress = { viewModel.openHabitProgressSheet(it) },
           onAddHabitClick = { viewModel.openAddHabitSheet() },
           onSelectCategory = { viewModel.setCategoryFilter(it) },
-          onAddTaskClick = { viewModel.openAddTaskSheet(selectedTodayDate) }
+          onAddTaskClick = { viewModel.openAddTaskSheet(selectedDate) }
         )
       }
 
       composable(DayFlowDestination.Calendar.route) {
+        val calendarTasks by viewModel.calendarTasks.collectAsStateWithLifecycle()
+        val allTasks by viewModel.allTasks.collectAsStateWithLifecycle()
+        val calendarDate by viewModel.selectedCalendarDate.collectAsStateWithLifecycle()
+        val calendarYear by viewModel.calendarYear.collectAsStateWithLifecycle()
+        val calendarMonth by viewModel.calendarMonth.collectAsStateWithLifecycle()
+
         CalendarScreen(
           tasks = calendarTasks,
           allTasks = allTasks,
-          selectedDate = selectedCalendarDate,
+          selectedDate = calendarDate,
           year = calendarYear,
           month = calendarMonth,
           onSelectDate = { viewModel.setSelectedCalendarDate(it) },
@@ -204,11 +197,13 @@ fun DayFlowApp(
           onNextMonth = { viewModel.nextCalendarMonth() },
           onToggleTask = { viewModel.toggleTask(it) },
           onEditTask = { viewModel.openEditTaskSheet(it) },
-          onAddTaskClick = { viewModel.openAddTaskSheet(selectedCalendarDate) }
+          onAddTaskClick = { viewModel.openAddTaskSheet(calendarDate) }
         )
       }
 
       composable(DayFlowDestination.Goals.route) {
+        val goals by viewModel.goals.collectAsStateWithLifecycle()
+
         GoalsScreen(
           goals = goals,
           onUpdateGoalProgress = { id, inc -> viewModel.updateGoalProgress(id, inc) },
@@ -223,6 +218,10 @@ fun DayFlowApp(
       }
 
       composable(DayFlowDestination.Statistics.route) {
+        val statisticsData by viewModel.statisticsData.collectAsStateWithLifecycle()
+        val statsTimeRange by viewModel.statsTimeRange.collectAsStateWithLifecycle()
+        val allTasks by viewModel.allTasks.collectAsStateWithLifecycle()
+
         StatisticsScreen(
           statisticsData = statisticsData,
           selectedRange = statsTimeRange,
@@ -236,17 +235,46 @@ fun DayFlowApp(
       }
 
       composable(DayFlowDestination.Coach.route) {
+        val coachInsights by viewModel.coachInsights.collectAsStateWithLifecycle()
+        val aiChatMessages by viewModel.aiChatMessages.collectAsStateWithLifecycle()
+        val aiChatSessions by viewModel.aiChatSessions.collectAsStateWithLifecycle()
+        val isAiThinking by viewModel.isAiThinking.collectAsStateWithLifecycle()
+        val geminiApiKey by viewModel.geminiApiKey.collectAsStateWithLifecycle()
+
         AiCoachScreen(
           insights = coachInsights,
           summary = summary,
           chatMessages = aiChatMessages,
+          chatSessions = aiChatSessions,
           isThinking = isAiThinking,
+          isGeminiConnected = geminiApiKey.isNotBlank(),
           onSendPrompt = { viewModel.sendCoachPrompt(it) },
-          onTriggerAction = { viewModel.triggerCoachAction(it) }
+          onTriggerAction = { viewModel.triggerCoachAction(it) },
+          onStopGeneration = { viewModel.stopAiGeneration() },
+          onRegenerate = { viewModel.regenerateLastAiMessage() },
+          onRetry = { viewModel.retryLastAiMessage() },
+          onClearChat = { viewModel.clearAiChatSession() },
+          onNewChat = { viewModel.createNewChatSession() },
+          onLoadSession = { viewModel.loadChatSession(it) },
+          onDeleteSession = { viewModel.deleteChatSession(it) },
+          onOpenSettings = {
+            navController.navigate(DayFlowDestination.Settings.route) {
+              launchSingleTop = true
+            }
+          }
         )
       }
 
       composable(DayFlowDestination.Settings.route) {
+        val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+        val accentColor by viewModel.accentColor.collectAsStateWithLifecycle()
+        val notifications by viewModel.notifications.collectAsStateWithLifecycle()
+        val geminiApiKey by viewModel.geminiApiKey.collectAsStateWithLifecycle()
+        val aiLanguage by viewModel.aiLanguage.collectAsStateWithLifecycle()
+        val isTestingConnection by viewModel.isTestingConnection.collectAsStateWithLifecycle()
+        val testConnectionResult by viewModel.testConnectionResult.collectAsStateWithLifecycle()
+        val aiMemories by viewModel.aiMemories.collectAsStateWithLifecycle()
+
         SettingsScreen(
           themeMode = themeMode,
           onThemeModeChange = { viewModel.setThemeMode(it) },
@@ -261,6 +289,19 @@ fun DayFlowApp(
           onMorningBriefingChange = { viewModel.setMorningBriefing(it) },
           onEveningReviewChange = { viewModel.setEveningReview(it) },
           onHabitRemindersChange = { viewModel.setHabitReminders(it) },
+          geminiApiKey = geminiApiKey,
+          onSaveGeminiApiKey = { viewModel.setGeminiApiKey(it) },
+          onClearGeminiApiKey = { viewModel.clearGeminiApiKey() },
+          aiLanguage = aiLanguage,
+          onAiLanguageChange = { viewModel.setAiLanguage(it) },
+          onTestGeminiConnection = { viewModel.testGeminiConnection(it) },
+          isTestingConnection = isTestingConnection,
+          testConnectionResult = testConnectionResult,
+          onClearTestConnectionResult = { viewModel.clearTestConnectionResult() },
+          aiMemories = aiMemories,
+          onDeleteMemory = { viewModel.deleteMemory(it) },
+          onClearAllMemories = { viewModel.clearAllMemories() },
+          onClearAllChatHistory = { viewModel.clearAllChatHistory() },
           onExportBackup = { viewModel.exportBackupJson() },
           onImportBackup = { viewModel.importBackupJson(it) },
           onNavigateBack = { navController.popBackStack() }
@@ -268,6 +309,8 @@ fun DayFlowApp(
       }
 
       composable(DayFlowDestination.AccentColor.route) {
+        val accentColor by viewModel.accentColor.collectAsStateWithLifecycle()
+
         AccentColorScreen(
           currentAccent = accentColor,
           onSelectAccent = { viewModel.setAccentColor(it) },
