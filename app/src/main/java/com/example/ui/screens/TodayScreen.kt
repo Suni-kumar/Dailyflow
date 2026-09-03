@@ -2,9 +2,11 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FitnessCenter
@@ -39,7 +42,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +64,8 @@ import com.example.model.DailyProgressSummary
 import com.example.model.HabitItem
 import com.example.model.ItemCategory
 import com.example.model.TaskItem
+import com.example.model.TaskStatus
+import com.example.ui.components.TaskStatusSelectorSheet
 import com.example.ui.theme.DayFlowBackground
 import com.example.ui.theme.DayFlowCardBorder
 import com.example.ui.theme.DayFlowOnSurface
@@ -65,12 +73,14 @@ import com.example.ui.theme.DayFlowOnSurfaceVariant
 import com.example.ui.theme.DayFlowOutlineVariant
 import com.example.ui.theme.DayFlowSecondary
 import com.example.ui.theme.DayFlowSurface
+import com.example.ui.theme.DayFlowSurfaceContainerHigh
 import com.example.ui.theme.DayFlowSurfaceContainerLow
 import com.example.ui.theme.DayFlowSurfaceContainerLowest
 import com.example.ui.theme.DayFlowSurfaceVariant
 import com.example.util.DateUtils
 import com.example.util.DayFlowDateItem
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TodayScreen(
   tasks: List<TaskItem>,
@@ -80,6 +90,7 @@ fun TodayScreen(
   onSelectDate: (String) -> Unit,
   selectedCategory: ItemCategory?,
   onToggleTask: (String) -> Unit,
+  onSetTaskStatus: (String, TaskStatus, String?) -> Unit = { _, _, _ -> },
   onEditTask: (TaskItem) -> Unit,
   onDeleteTask: (String) -> Unit,
   onToggleHabit: (String) -> Unit,
@@ -92,50 +103,65 @@ fun TodayScreen(
     DateUtils.getCurrentWeekDays(selectedDate)
   }
 
-  LazyColumn(
-    modifier = Modifier
-      .fillMaxSize()
-      .background(DayFlowBackground)
-      .testTag("today_screen"),
-    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp),
-    verticalArrangement = Arrangement.spacedBy(24.dp)
-  ) {
-    // 1. Date Selector
-    item(key = "date_selector") {
-      DateSelectorSection(
-        days = weekDays,
-        selectedDate = selectedDate,
-        onSelectDate = onSelectDate
+  var taskForStatusSheet by remember { mutableStateOf<TaskItem?>(null) }
+
+  Box(modifier = Modifier.fillMaxSize()) {
+    LazyColumn(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(DayFlowBackground)
+        .testTag("today_screen"),
+      contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp),
+      verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+      // 1. Date Selector
+      item(key = "date_selector") {
+        DateSelectorSection(
+          days = weekDays,
+          selectedDate = selectedDate,
+          onSelectDate = onSelectDate
+        )
+      }
+
+      // 2. Daily Progress Summary Card
+      item(key = "daily_summary") {
+        DailyProgressCard(summary = summary)
+      }
+
+      // 3. Your Day (Task Cards)
+      item(key = "your_day_section") {
+        YourDaySection(
+          tasks = tasks,
+          onToggleTask = onToggleTask,
+          onOpenStatusSelector = { taskForStatusSheet = it },
+          onEditTask = onEditTask,
+          onAddTaskClick = onAddTaskClick
+        )
+      }
+
+      // 4. Habits Section
+      item(key = "habits_section") {
+        HabitsSection(
+          habits = habits,
+          onToggleHabit = onToggleHabit,
+          onOpenHabitProgress = onOpenHabitProgress,
+          onAddHabitClick = onAddHabitClick
+        )
+      }
+
+      item(key = "bottom_spacer") {
+        Spacer(modifier = Modifier.height(64.dp))
+      }
+    }
+
+    if (taskForStatusSheet != null) {
+      TaskStatusSelectorSheet(
+        task = taskForStatusSheet!!,
+        onSelectStatus = { status, reason ->
+          onSetTaskStatus(taskForStatusSheet!!.id, status, reason)
+        },
+        onDismiss = { taskForStatusSheet = null }
       )
-    }
-
-    // 2. Daily Progress Summary Card
-    item(key = "daily_summary") {
-      DailyProgressCard(summary = summary)
-    }
-
-    // 3. Your Day (Task Cards)
-    item(key = "your_day_section") {
-      YourDaySection(
-        tasks = tasks,
-        onToggleTask = onToggleTask,
-        onEditTask = onEditTask,
-        onAddTaskClick = onAddTaskClick
-      )
-    }
-
-    // 4. Habits Section
-    item(key = "habits_section") {
-      HabitsSection(
-        habits = habits,
-        onToggleHabit = onToggleHabit,
-        onOpenHabitProgress = onOpenHabitProgress,
-        onAddHabitClick = onAddHabitClick
-      )
-    }
-
-    item(key = "bottom_spacer") {
-      Spacer(modifier = Modifier.height(64.dp))
     }
   }
 }
@@ -279,6 +305,7 @@ private fun DailyProgressCard(summary: DailyProgressSummary) {
 
       // Circular Progress Indicator
       val primaryColor = MaterialTheme.colorScheme.primary
+      val surfaceVariantColor = DayFlowSurfaceVariant
       Box(
         modifier = Modifier.size(60.dp),
         contentAlignment = Alignment.Center
@@ -286,7 +313,7 @@ private fun DailyProgressCard(summary: DailyProgressSummary) {
         Canvas(modifier = Modifier.fillMaxSize()) {
           val strokeWidth = 3.5.dp.toPx()
           drawCircle(
-            color = DayFlowSurfaceVariant,
+            color = surfaceVariantColor,
             style = Stroke(width = strokeWidth)
           )
           if (percent > 0) {
@@ -308,6 +335,7 @@ private fun DailyProgressCard(summary: DailyProgressSummary) {
 private fun YourDaySection(
   tasks: List<TaskItem>,
   onToggleTask: (String) -> Unit,
+  onOpenStatusSelector: (TaskItem) -> Unit,
   onEditTask: (TaskItem) -> Unit,
   onAddTaskClick: () -> Unit
 ) {
@@ -378,6 +406,7 @@ private fun YourDaySection(
             task = task,
             index = index,
             onToggle = { onToggleTask(task.id) },
+            onLongClickStatus = { onOpenStatusSelector(task) },
             onClick = { onEditTask(task) }
           )
         }
@@ -386,24 +415,29 @@ private fun YourDaySection(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StitchTaskCard(
   task: TaskItem,
   index: Int,
   onToggle: () -> Unit,
+  onLongClickStatus: () -> Unit,
   onClick: () -> Unit
 ) {
   val isCompleted = task.isCompleted
-  val isActive = !isCompleted && (index == 1 || (index == 0 && !isCompleted))
+  val isException = task.isException
+  val isActive = task.isPending && (index == 0 || (tasksAreCompletedBefore(index)))
 
   val cardBg = when {
     isCompleted -> DayFlowSurfaceContainerLow
+    isException -> DayFlowSurfaceContainerLow.copy(alpha = 0.75f)
     isActive -> DayFlowSurfaceContainerLowest
     else -> DayFlowSurface
   }
 
   val borderCol = when {
     isActive -> DayFlowOutlineVariant
+    isException -> DayFlowCardBorder.copy(alpha = 0.7f)
     else -> DayFlowCardBorder
   }
 
@@ -434,48 +468,90 @@ private fun StitchTaskCard(
           .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
       ) {
-        // Leading Check/Status Circle (clickable separately to toggle)
+        // Leading Check/Status Circle (clickable to toggle, long press to open selector)
         Box(
           modifier = Modifier
             .size(28.dp)
             .clip(CircleShape)
-            .clickable { onToggle() }
+            .combinedClickable(
+              onClick = onToggle,
+              onLongClick = onLongClickStatus
+            )
             .then(
               when {
                 isCompleted -> Modifier
                   .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
                   .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                isException -> Modifier
+                  .background(DayFlowSurfaceContainerHigh)
+                  .border(1.5.dp, DayFlowOutlineVariant, CircleShape)
                 isActive -> Modifier
                   .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
                 else -> Modifier
                   .border(1.5.dp, DayFlowOutlineVariant, CircleShape)
               }
-            ),
+            )
+            .testTag("task_status_button_${task.id}"),
           contentAlignment = Alignment.Center
         ) {
-          if (isCompleted) {
-            Icon(
-              imageVector = Icons.Default.Check,
-              contentDescription = "Completed",
-              tint = MaterialTheme.colorScheme.primary,
-              modifier = Modifier.size(14.dp)
-            )
+          when {
+            isCompleted -> {
+              Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = "Completed",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp)
+              )
+            }
+            isException -> {
+              Icon(
+                imageVector = Icons.Default.Remove,
+                contentDescription = "Exception",
+                tint = DayFlowOnSurfaceVariant,
+                modifier = Modifier.size(14.dp)
+              )
+            }
           }
         }
 
         Spacer(modifier = Modifier.width(14.dp))
 
         Column(modifier = Modifier.weight(1f)) {
-          Text(
-            text = task.title,
-            style = MaterialTheme.typography.bodyLarge.copy(
-              textDecoration = if (isCompleted) TextDecoration.LineThrough else TextDecoration.None
-            ),
-            color = if (isCompleted) DayFlowOnSurfaceVariant.copy(alpha = 0.7f) else DayFlowOnSurface,
-            fontWeight = FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-          )
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            Text(
+              text = task.title,
+              style = MaterialTheme.typography.bodyLarge.copy(
+                textDecoration = if (isCompleted) TextDecoration.LineThrough else TextDecoration.None
+              ),
+              color = when {
+                isCompleted -> DayFlowOnSurfaceVariant.copy(alpha = 0.7f)
+                isException -> DayFlowOnSurfaceVariant
+                else -> DayFlowOnSurface
+              },
+              fontWeight = FontWeight.Normal,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              modifier = Modifier.weight(1f, fill = false)
+            )
+
+            if (isException) {
+              Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = DayFlowSurfaceContainerHigh,
+                border = BorderStroke(0.5.dp, DayFlowOutlineVariant)
+              ) {
+                Text(
+                  text = "Exception",
+                  style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                  color = DayFlowOnSurfaceVariant,
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                )
+              }
+            }
+          }
 
           Spacer(modifier = Modifier.height(2.dp))
 
@@ -491,10 +567,18 @@ private fun StitchTaskCard(
             task.time
           }
 
+          val infoText = if (isException && !task.exceptionReason.isNullOrBlank()) {
+            "Note: ${task.exceptionReason} • $timeRange • ${task.category.displayName}"
+          } else {
+            "$timeRange • $durationStr • ${task.category.displayName}"
+          }
+
           Text(
-            text = "$timeRange • $durationStr • ${task.category.displayName}",
+            text = infoText,
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-            color = DayFlowOnSurfaceVariant.copy(alpha = if (isCompleted) 0.6f else 0.85f)
+            color = DayFlowOnSurfaceVariant.copy(alpha = if (isCompleted) 0.6f else 0.85f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
           )
         }
 
@@ -510,6 +594,8 @@ private fun StitchTaskCard(
     }
   }
 }
+
+private fun tasksAreCompletedBefore(index: Int): Boolean = index == 0
 
 @Composable
 private fun HabitsSection(
@@ -666,6 +752,8 @@ private fun HabitCard(
   onClick: () -> Unit,
   onToggle: (() -> Unit)? = null
 ) {
+  val surfaceVariantColor = DayFlowSurfaceVariant
+
   Surface(
     modifier = modifier
       .clip(RoundedCornerShape(16.dp))
@@ -694,7 +782,7 @@ private fun HabitCard(
         Canvas(modifier = Modifier.fillMaxSize()) {
           val strokeWidth = 2.5.dp.toPx()
           drawCircle(
-            color = DayFlowSurfaceVariant,
+            color = surfaceVariantColor,
             style = Stroke(width = strokeWidth)
           )
           if (progress > 0f || isCompleted) {

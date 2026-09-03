@@ -18,19 +18,24 @@ fun buildDarkColorScheme(accent: DayFlowAccent): ColorScheme = darkColorScheme(
   onPrimary = Color(0xFF1C1A1A),
   primaryContainer = accent.darkPrimaryContainer,
   onPrimaryContainer = accent.darkOnPrimaryContainer,
-  secondary = accent.secondaryContainer,
+  secondary = accent.secondary,
   onSecondary = Color(0xFF16173E),
-  secondaryContainer = accent.secondary,
+  secondaryContainer = accent.secondaryContainer,
   onSecondaryContainer = accent.secondaryContainer,
   tertiary = accent.tertiary,
   onTertiary = Color(0xFF1B1C1C),
-  background = DayFlowDarkBackground,
-  onBackground = DayFlowDarkOnSurface,
-  surface = DayFlowDarkSurface,
-  onSurface = DayFlowDarkOnSurface,
-  surfaceVariant = DayFlowDarkSurfaceLow,
-  onSurfaceVariant = DayFlowDarkOnSurfaceVariant,
-  outline = DayFlowDarkBorder
+  background = DayFlowDarkThemeColors.background,
+  onBackground = DayFlowDarkThemeColors.onSurface,
+  surface = DayFlowDarkThemeColors.surface,
+  onSurface = DayFlowDarkThemeColors.onSurface,
+  surfaceVariant = DayFlowDarkThemeColors.surfaceVariant,
+  onSurfaceVariant = DayFlowDarkThemeColors.onSurfaceVariant,
+  surfaceContainer = DayFlowDarkThemeColors.surface,
+  surfaceContainerLow = DayFlowDarkThemeColors.surfaceContainerLow,
+  surfaceContainerLowest = DayFlowDarkThemeColors.surfaceContainerLowest,
+  surfaceContainerHigh = DayFlowDarkThemeColors.surfaceContainerHigh,
+  outline = DayFlowDarkThemeColors.outline,
+  outlineVariant = DayFlowDarkThemeColors.outlineVariant
 )
 
 fun buildLightColorScheme(accent: DayFlowAccent): ColorScheme = lightColorScheme(
@@ -44,13 +49,18 @@ fun buildLightColorScheme(accent: DayFlowAccent): ColorScheme = lightColorScheme
   onSecondaryContainer = accent.onSecondaryContainer,
   tertiary = accent.tertiary,
   onTertiary = Color.White,
-  background = DayFlowBackground,
-  onBackground = DayFlowOnSurface,
-  surface = DayFlowSurface,
-  onSurface = DayFlowOnSurface,
-  surfaceVariant = DayFlowSurfaceVariant,
-  onSurfaceVariant = DayFlowOnSurfaceVariant,
-  outline = DayFlowOutlineVariant
+  background = DayFlowLightColors.background,
+  onBackground = DayFlowLightColors.onSurface,
+  surface = DayFlowLightColors.surface,
+  onSurface = DayFlowLightColors.onSurface,
+  surfaceVariant = DayFlowLightColors.surfaceVariant,
+  onSurfaceVariant = DayFlowLightColors.onSurfaceVariant,
+  surfaceContainer = DayFlowLightColors.surface,
+  surfaceContainerLow = DayFlowLightColors.surfaceContainerLow,
+  surfaceContainerLowest = DayFlowLightColors.surfaceContainerLowest,
+  surfaceContainerHigh = DayFlowLightColors.surfaceContainerHigh,
+  outline = DayFlowLightColors.outline,
+  outlineVariant = DayFlowLightColors.outlineVariant
 )
 
 @Composable
@@ -70,7 +80,9 @@ fun DayFlowTheme(
   }
 
   CompositionLocalProvider(
-    LocalDayFlowAccent provides accent
+    LocalDayFlowAccent provides accent,
+    LocalDayFlowColors provides if (darkTheme) DayFlowDarkThemeColors else DayFlowLightColors,
+    LocalDayFlowIsDark provides darkTheme
   ) {
     MaterialTheme(
       colorScheme = colorScheme,

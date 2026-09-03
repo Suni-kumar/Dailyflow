@@ -61,11 +61,13 @@ import com.example.model.CustomCategory
 import com.example.model.ItemCategory
 import com.example.model.TaskItem
 import com.example.model.TaskPriority
+import com.example.model.TaskStatus
 import com.example.ui.theme.DayFlowCardBorder
 import com.example.ui.theme.DayFlowOnPrimary
 import com.example.ui.theme.DayFlowOnSurface
 import com.example.ui.theme.DayFlowOnSurfaceVariant
 import com.example.ui.theme.DayFlowOutlineVariant
+import com.example.ui.theme.DayFlowSurfaceContainerHigh
 import com.example.ui.theme.DayFlowSurfaceContainerLow
 import com.example.ui.theme.DayFlowSurfaceContainerLowest
 import com.example.util.CategoryIconHelper
@@ -108,6 +110,12 @@ fun AddTaskSheet(
   }
   var selectedCategory by remember(taskToEdit) {
     mutableStateOf(taskToEdit?.category ?: ItemCategory.WORK)
+  }
+  var selectedStatus by remember(taskToEdit) {
+    mutableStateOf(taskToEdit?.status ?: TaskStatus.PENDING)
+  }
+  var exceptionReason by remember(taskToEdit) {
+    mutableStateOf(taskToEdit?.exceptionReason ?: "")
   }
 
   var showCreateCategoryDialog by remember { mutableStateOf(false) }
@@ -398,6 +406,107 @@ fun AddTaskSheet(
         }
       }
 
+      Spacer(modifier = Modifier.height(28.dp))
+
+      // STATUS Section
+      Text(
+        text = "STATUS",
+        style = MaterialTheme.typography.labelSmall.copy(
+          fontSize = 11.sp,
+          fontWeight = FontWeight.SemiBold,
+          letterSpacing = 1.2.sp
+        ),
+        color = DayFlowOnSurfaceVariant
+      )
+
+      Spacer(modifier = Modifier.height(12.dp))
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+      ) {
+        listOf(
+          TaskStatus.PENDING to "Pending",
+          TaskStatus.COMPLETED to "Completed",
+          TaskStatus.EXCEPTION to "Exception"
+        ).forEach { (status, label) ->
+          val isSelected = selectedStatus == status
+          Surface(
+            modifier = Modifier
+              .weight(1f)
+              .clip(RoundedCornerShape(12.dp))
+              .clickable { selectedStatus = status }
+              .testTag("task_status_option_${label.lowercase()}"),
+            shape = RoundedCornerShape(12.dp),
+            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else DayFlowSurfaceContainerLow,
+            border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else DayFlowOutlineVariant)
+          ) {
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+              contentAlignment = Alignment.Center
+            ) {
+              Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                  fontSize = 13.sp,
+                  fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                ),
+                color = if (isSelected) MaterialTheme.colorScheme.primary else DayFlowOnSurfaceVariant
+              )
+            }
+          }
+        }
+      }
+
+      if (selectedStatus == TaskStatus.EXCEPTION) {
+        Spacer(modifier = Modifier.height(12.dp))
+        Surface(
+          modifier = Modifier.fillMaxWidth(),
+          shape = RoundedCornerShape(12.dp),
+          color = DayFlowSurfaceContainerLow,
+          border = BorderStroke(1.dp, DayFlowCardBorder)
+        ) {
+          Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+              text = "EXCEPTION REASON (OPTIONAL)",
+              style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.8.sp
+              ),
+              color = DayFlowOnSurfaceVariant.copy(alpha = 0.7f)
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            BasicTextField(
+              value = exceptionReason,
+              onValueChange = { exceptionReason = it },
+              textStyle = MaterialTheme.typography.bodyMedium.copy(
+                color = DayFlowOnSurface,
+                fontSize = 14.sp
+              ),
+              cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+              modifier = Modifier
+                .fillMaxWidth()
+                .testTag("add_task_exception_reason_input"),
+              decorationBox = { innerTextField ->
+                if (exceptionReason.isEmpty()) {
+                  Text(
+                    text = "e.g., Postponed due to urgent client meeting",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                      color = DayFlowOnSurfaceVariant.copy(alpha = 0.5f),
+                      fontSize = 14.sp
+                    )
+                  )
+                }
+                innerTextField()
+              }
+            )
+          }
+        }
+      }
+
       Spacer(modifier = Modifier.height(32.dp))
 
       // Bottom Action: Create / Save Task Button
@@ -413,6 +522,8 @@ fun AddTaskSheet(
                   title = title.trim(),
                   description = description.trim(),
                   category = selectedCategory,
+                  status = selectedStatus,
+                  exceptionReason = if (selectedStatus == TaskStatus.EXCEPTION) exceptionReason.trim().ifBlank { null } else null,
                   time = formattedStart,
                   endTime = formattedEnd,
                   estimatedMinutes = estimatedMinutes

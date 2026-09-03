@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.local.converter.DayFlowConverters
 import com.example.data.local.dao.GoalDao
@@ -24,6 +25,7 @@ import com.example.data.local.entity.ai.AiChatSessionEntity
 import com.example.data.local.entity.ai.AiMemoryEntity
 import com.example.model.ItemCategory
 import com.example.model.TaskPriority
+import com.example.model.TaskStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -39,7 +41,7 @@ import kotlinx.coroutines.launch
     AiChatMessageEntity::class,
     AiMemoryEntity::class
   ],
-  version = 4,
+  version = 5,
   exportSchema = false
 )
 @TypeConverters(DayFlowConverters::class)
@@ -57,6 +59,14 @@ abstract class DayFlowDatabase : RoomDatabase() {
     @Volatile
     private var INSTANCE: DayFlowDatabase? = null
 
+    val MIGRATION_4_5 = object : Migration(4, 5) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE tasks ADD COLUMN status TEXT NOT NULL DEFAULT 'PENDING'")
+        db.execSQL("UPDATE tasks SET status = 'COMPLETED' WHERE isCompleted = 1")
+        db.execSQL("ALTER TABLE tasks ADD COLUMN exceptionReason TEXT DEFAULT NULL")
+      }
+    }
+
     fun getDatabase(context: Context, scope: CoroutineScope = CoroutineScope(Dispatchers.IO)): DayFlowDatabase {
       return INSTANCE ?: synchronized(this) {
         val instance = Room.databaseBuilder(
@@ -64,6 +74,7 @@ abstract class DayFlowDatabase : RoomDatabase() {
           DayFlowDatabase::class.java,
           "dayflow_database"
         )
+          .addMigrations(MIGRATION_4_5)
           .fallbackToDestructiveMigration()
           .addCallback(DayFlowDatabaseCallback(scope))
           .build()
@@ -103,6 +114,7 @@ abstract class DayFlowDatabase : RoomDatabase() {
           endTime = "07:15 AM",
           category = ItemCategory.MINDFULNESS,
           priority = TaskPriority.MEDIUM,
+          status = TaskStatus.COMPLETED,
           isCompleted = true,
           estimatedMinutes = 15
         ),
@@ -115,6 +127,7 @@ abstract class DayFlowDatabase : RoomDatabase() {
           endTime = "11:00 AM",
           category = ItemCategory.WORK,
           priority = TaskPriority.HIGH,
+          status = TaskStatus.PENDING,
           isCompleted = false,
           estimatedMinutes = 120
         ),
@@ -127,6 +140,7 @@ abstract class DayFlowDatabase : RoomDatabase() {
           endTime = "02:30 PM",
           category = ItemCategory.PERSONAL,
           priority = TaskPriority.LOW,
+          status = TaskStatus.PENDING,
           isCompleted = false,
           estimatedMinutes = 30
         )

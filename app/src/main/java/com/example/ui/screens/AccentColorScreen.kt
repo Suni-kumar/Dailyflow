@@ -48,6 +48,7 @@ import com.example.ui.theme.DayFlowOutlineVariant
 import com.example.ui.theme.DayFlowSurface
 import com.example.ui.theme.DayFlowSurfaceContainerLow
 import com.example.ui.theme.DayFlowSurfaceVariant
+import com.example.ui.theme.LocalDayFlowIsDark
 
 @Composable
 fun AccentColorScreen(
@@ -149,6 +150,9 @@ private fun AccentOptionCard(
   isSelected: Boolean,
   onClick: () -> Unit
 ) {
+  val isDark = LocalDayFlowIsDark.current
+  val activePrimary = if (isDark) accent.darkPrimary else accent.primary
+
   Surface(
     modifier = Modifier
       .fillMaxWidth()
@@ -159,7 +163,7 @@ private fun AccentOptionCard(
     color = if (isSelected) DayFlowSurfaceContainerLow else DayFlowSurface,
     border = BorderStroke(
       width = if (isSelected) 1.5.dp else 1.dp,
-      color = if (isSelected) accent.primary else DayFlowCardBorder
+      color = if (isSelected) activePrimary else DayFlowCardBorder
     )
   ) {
     Row(
@@ -184,7 +188,7 @@ private fun AccentOptionCard(
               fontSize = 16.sp,
               fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
             ),
-            color = if (isSelected) accent.primary else DayFlowOnSurface
+            color = if (isSelected) activePrimary else DayFlowOnSurface
           )
           Spacer(modifier = Modifier.height(2.dp))
           Text(
@@ -205,7 +209,7 @@ private fun AccentOptionCard(
         modifier = Modifier
           .size(24.dp)
           .clip(CircleShape)
-          .background(if (isSelected) accent.primary else Color.Transparent)
+          .background(if (isSelected) activePrimary else Color.Transparent)
           .then(
             if (!isSelected) {
               Modifier.background(DayFlowSurfaceVariant.copy(alpha = 0.5f))
@@ -228,6 +232,10 @@ private fun AccentOptionCard(
 
 @Composable
 private fun PaletteSwatchPreview(accent: DayFlowAccent) {
+  val isDark = LocalDayFlowIsDark.current
+  val primaryTone = if (isDark) accent.darkPrimary else accent.primary
+  val containerTone = if (isDark) accent.darkPrimaryContainer else accent.primaryContainer
+
   Row(
     horizontalArrangement = Arrangement.spacedBy(4.dp),
     verticalAlignment = Alignment.CenterVertically
@@ -237,7 +245,7 @@ private fun PaletteSwatchPreview(accent: DayFlowAccent) {
       modifier = Modifier
         .size(22.dp)
         .clip(CircleShape)
-        .background(accent.primary)
+        .background(primaryTone)
     )
 
     // Primary Container Tone
@@ -245,7 +253,7 @@ private fun PaletteSwatchPreview(accent: DayFlowAccent) {
       modifier = Modifier
         .size(16.dp)
         .clip(CircleShape)
-        .background(accent.primaryContainer)
+        .background(containerTone)
     )
 
     // Secondary Accent Tone

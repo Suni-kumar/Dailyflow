@@ -120,7 +120,7 @@ fun DayFlowApp(
           shape = CircleShape,
           elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 3.dp),
           modifier = Modifier
-            .padding(bottom = 68.dp)
+            .padding(bottom = 10.dp)
             .testTag("fab_add_task")
         ) {
           Icon(
@@ -170,6 +170,7 @@ fun DayFlowApp(
           onSelectDate = { viewModel.selectTodayDate(it) },
           selectedCategory = selectedCategory,
           onToggleTask = { viewModel.toggleTask(it) },
+          onSetTaskStatus = { id, status, reason -> viewModel.setTaskStatus(id, status, reason) },
           onEditTask = { viewModel.openEditTaskSheet(it) },
           onDeleteTask = { viewModel.deleteTask(it) },
           onToggleHabit = { viewModel.toggleHabit(it) },
@@ -197,6 +198,7 @@ fun DayFlowApp(
           onPrevMonth = { viewModel.prevCalendarMonth() },
           onNextMonth = { viewModel.nextCalendarMonth() },
           onToggleTask = { viewModel.toggleTask(it) },
+          onSetTaskStatus = { id, status, reason -> viewModel.setTaskStatus(id, status, reason) },
           onEditTask = { viewModel.openEditTaskSheet(it) },
           onAddTaskClick = { viewModel.openAddTaskSheet(calendarDate) }
         )

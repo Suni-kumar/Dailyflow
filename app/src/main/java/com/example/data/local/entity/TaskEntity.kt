@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.example.model.ItemCategory
 import com.example.model.TaskPriority
+import com.example.model.TaskStatus
 
 @Entity(tableName = "tasks")
 data class TaskEntity(
@@ -16,7 +17,9 @@ data class TaskEntity(
   val endTime: String? = null,
   val category: ItemCategory = ItemCategory.WORK,
   val priority: TaskPriority = TaskPriority.MEDIUM,
+  val status: TaskStatus = TaskStatus.PENDING,
   val isCompleted: Boolean = false,
+  val exceptionReason: String? = null,
   val estimatedMinutes: Int = 30,
   val isRecurring: Boolean = false,
   val recurringPattern: String? = null,

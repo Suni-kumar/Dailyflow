@@ -1,8 +1,10 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +26,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.Icon
@@ -32,7 +35,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +52,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.ItemCategory
 import com.example.model.TaskItem
+import com.example.model.TaskStatus
+import com.example.ui.components.TaskStatusSelectorSheet
 import com.example.ui.theme.DayFlowBackground
 import com.example.ui.theme.DayFlowCardBorder
 import com.example.ui.theme.DayFlowOnSecondaryContainer
@@ -53,12 +61,14 @@ import com.example.ui.theme.DayFlowOnSurface
 import com.example.ui.theme.DayFlowOnSurfaceVariant
 import com.example.ui.theme.DayFlowOutlineVariant
 import com.example.ui.theme.DayFlowSecondaryContainer
+import com.example.ui.theme.DayFlowSurfaceContainerHigh
 import com.example.ui.theme.DayFlowSurfaceContainerLow
 import com.example.ui.theme.DayFlowSurfaceContainerLowest
 import com.example.ui.theme.DayFlowSurfaceVariant
 import com.example.util.CalendarGridCell
 import com.example.util.DateUtils
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CalendarScreen(
   tasks: List<TaskItem>,
@@ -70,6 +80,7 @@ fun CalendarScreen(
   onPrevMonth: () -> Unit,
   onNextMonth: () -> Unit,
   onToggleTask: (String) -> Unit,
+  onSetTaskStatus: (String, TaskStatus, String?) -> Unit = { _, _, _ -> },
   onEditTask: (TaskItem) -> Unit,
   onAddTaskClick: () -> Unit
 ) {
@@ -100,14 +111,17 @@ fun CalendarScreen(
 
   val itemsCountText = if (tasks.size == 1) "1 item" else "${tasks.size} items"
 
-  LazyColumn(
-    modifier = Modifier
-      .fillMaxSize()
-      .background(DayFlowBackground)
-      .testTag("calendar_screen"),
-    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-    verticalArrangement = Arrangement.spacedBy(24.dp)
-  ) {
+  var taskForStatusSheet by remember { mutableStateOf<TaskItem?>(null) }
+
+  Box(modifier = Modifier.fillMaxSize()) {
+    LazyColumn(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(DayFlowBackground)
+        .testTag("calendar_screen"),
+      contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+      verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
     // 1. Month Header & Navigation
     item(key = "calendar_month_header") {
       Row(
@@ -314,6 +328,7 @@ fun CalendarScreen(
         CalendarTaskCard(
           task = task,
           onToggle = { onToggleTask(task.id) },
+          onLongClickStatus = { taskForStatusSheet = task },
           onClick = { onEditTask(task) }
         )
       }
@@ -323,6 +338,17 @@ fun CalendarScreen(
       Spacer(modifier = Modifier.height(72.dp))
     }
   }
+
+  if (taskForStatusSheet != null) {
+    TaskStatusSelectorSheet(
+      task = taskForStatusSheet!!,
+      onSelectStatus = { status, reason ->
+        onSetTaskStatus(taskForStatusSheet!!.id, status, reason)
+      },
+      onDismiss = { taskForStatusSheet = null }
+    )
+  }
+}
 }
 
 @Composable
@@ -380,13 +406,16 @@ private fun CalendarDayCell(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CalendarTaskCard(
   task: TaskItem,
   onToggle: () -> Unit,
+  onLongClickStatus: () -> Unit,
   onClick: () -> Unit
 ) {
   val isCompleted = task.isCompleted
+  val isException = task.isException
 
   Surface(
     modifier = Modifier
@@ -394,8 +423,12 @@ private fun CalendarTaskCard(
       .clickable { onClick() }
       .testTag("calendar_task_${task.id}"),
     shape = RoundedCornerShape(16.dp),
-    color = DayFlowSurfaceContainerLowest,
-    border = BorderStroke(1.dp, DayFlowCardBorder)
+    color = when {
+      isCompleted -> DayFlowSurfaceContainerLow
+      isException -> DayFlowSurfaceContainerLow.copy(alpha = 0.75f)
+      else -> DayFlowSurfaceContainerLowest
+    },
+    border = BorderStroke(1.dp, if (isException) DayFlowCardBorder.copy(alpha = 0.7f) else DayFlowCardBorder)
   ) {
     Row(
       modifier = Modifier
@@ -403,29 +436,43 @@ private fun CalendarTaskCard(
         .padding(16.dp),
       verticalAlignment = Alignment.Top
     ) {
-      // Checkbox / Radio Icon (Clickable separately to toggle task)
+      // Checkbox / Radio Icon (Clickable to toggle, long press to open selector)
       Box(
         modifier = Modifier
           .size(28.dp)
           .clip(CircleShape)
-          .clickable { onToggle() }
+          .combinedClickable(
+            onClick = onToggle,
+            onLongClick = onLongClickStatus
+          )
           .testTag("task_toggle_${task.id}"),
         contentAlignment = Alignment.Center
       ) {
-        if (isCompleted) {
-          Icon(
-            imageVector = Icons.Filled.CheckCircle,
-            contentDescription = "Completed",
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
-          )
-        } else {
-          Icon(
-            imageVector = Icons.Outlined.RadioButtonUnchecked,
-            contentDescription = "Incomplete",
-            tint = DayFlowOnSurfaceVariant,
-            modifier = Modifier.size(24.dp)
-          )
+        when {
+          isCompleted -> {
+            Icon(
+              imageVector = Icons.Filled.CheckCircle,
+              contentDescription = "Completed",
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(24.dp)
+            )
+          }
+          isException -> {
+            Icon(
+              imageVector = Icons.Filled.Remove,
+              contentDescription = "Exception",
+              tint = DayFlowOnSurfaceVariant,
+              modifier = Modifier.size(20.dp)
+            )
+          }
+          else -> {
+            Icon(
+              imageVector = Icons.Outlined.RadioButtonUnchecked,
+              contentDescription = "Pending",
+              tint = DayFlowOnSurfaceVariant,
+              modifier = Modifier.size(24.dp)
+            )
+          }
         }
       }
 
@@ -437,18 +484,42 @@ private fun CalendarTaskCard(
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Text(
-            text = task.title,
-            style = MaterialTheme.typography.bodyLarge.copy(
-              fontSize = 16.sp,
-              fontWeight = FontWeight.Normal,
-              textDecoration = if (isCompleted) TextDecoration.LineThrough else TextDecoration.None
-            ),
-            color = if (isCompleted) DayFlowOnSurfaceVariant.copy(alpha = 0.7f) else DayFlowOnSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.weight(1f, fill = false)
-          )
+          ) {
+            Text(
+              text = task.title,
+              style = MaterialTheme.typography.bodyLarge.copy(
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Normal,
+                textDecoration = if (isCompleted) TextDecoration.LineThrough else TextDecoration.None
+              ),
+              color = when {
+                isCompleted -> DayFlowOnSurfaceVariant.copy(alpha = 0.7f)
+                isException -> DayFlowOnSurfaceVariant
+                else -> DayFlowOnSurface
+              },
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+
+            if (isException) {
+              Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = DayFlowSurfaceContainerHigh,
+                border = BorderStroke(0.5.dp, DayFlowOutlineVariant)
+              ) {
+                Text(
+                  text = "Exception",
+                  style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                  color = DayFlowOnSurfaceVariant,
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                )
+              }
+            }
+          }
 
           Spacer(modifier = Modifier.width(8.dp))
 
@@ -528,7 +599,15 @@ private fun CalendarTaskCard(
             }
           }
 
-          if (task.estimatedMinutes > 0) {
+          if (isException && !task.exceptionReason.isNullOrBlank()) {
+            Text(
+              text = "Note: ${task.exceptionReason}",
+              style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+              color = DayFlowOnSurfaceVariant.copy(alpha = 0.85f),
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          } else if (task.estimatedMinutes > 0) {
             val h = task.estimatedMinutes / 60
             val m = task.estimatedMinutes % 60
             val durationStr = if (h > 0 && m > 0) "$h hr $m min" else if (h > 0) "$h hr" else "$m min"

@@ -8,6 +8,19 @@ enum class TaskPriority {
   HIGH
 }
 
+enum class TaskStatus(val displayName: String) {
+  PENDING("Pending"),
+  COMPLETED("Completed"),
+  EXCEPTION("Exception");
+
+  companion object {
+    fun fromName(name: String?): TaskStatus {
+      if (name.isNullOrBlank()) return PENDING
+      return entries.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: PENDING
+    }
+  }
+}
+
 enum class ItemCategory(val displayName: String, val colorHex: Long) {
   WORK("Work", 0xFF3B82F6),
   PERSONAL("Personal", 0xFF8B5CF6),
@@ -67,9 +80,19 @@ data class TaskItem(
   val time: String = "09:00 AM",
   val endTime: String? = null,
   val dueDate: String = "Today",
-  val isCompleted: Boolean = false,
+  val status: TaskStatus = TaskStatus.PENDING,
+  val exceptionReason: String? = null,
   val estimatedMinutes: Int = 30
-)
+) {
+  val isCompleted: Boolean
+    get() = status == TaskStatus.COMPLETED
+
+  val isException: Boolean
+    get() = status == TaskStatus.EXCEPTION
+
+  val isPending: Boolean
+    get() = status == TaskStatus.PENDING
+}
 
 @Immutable
 data class HabitItem(

@@ -28,6 +28,7 @@ import com.example.model.StatisticsData
 import com.example.model.StatsTimeRange
 import com.example.model.TaskItem
 import com.example.model.TaskPriority
+import com.example.model.TaskStatus
 import com.example.util.DateUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -69,7 +70,7 @@ class DayFlowRepository(
         priority = TaskPriority.MEDIUM,
         time = "07:00 AM",
         dueDate = com.example.util.DateUtils.getTodayDateKey(),
-        isCompleted = true,
+        status = TaskStatus.COMPLETED,
         estimatedMinutes = 15
       ),
       TaskItem(
@@ -80,7 +81,7 @@ class DayFlowRepository(
         priority = TaskPriority.HIGH,
         time = "09:00 AM",
         dueDate = com.example.util.DateUtils.getTodayDateKey(),
-        isCompleted = false,
+        status = TaskStatus.PENDING,
         estimatedMinutes = 120
       ),
       TaskItem(
@@ -91,7 +92,7 @@ class DayFlowRepository(
         priority = TaskPriority.LOW,
         time = "02:00 PM",
         dueDate = com.example.util.DateUtils.getTodayDateKey(),
-        isCompleted = false,
+        status = TaskStatus.PENDING,
         estimatedMinutes = 30
       )
     )
@@ -180,10 +181,16 @@ class DayFlowRepository(
   )
   val coachInsights: StateFlow<List<CoachInsight>> = _coachInsights.asStateFlow()
 
-  // Task sorting comparator: scheduled time ascending, then priority, then stable id; completed cleanly separated
+  // Task sorting comparator: pending first (time ascending, priority, id), then exceptions, then completed
   fun sortTasks(taskList: List<TaskItem>): List<TaskItem> {
     return taskList.sortedWith(
-      compareBy<TaskItem> { it.isCompleted }
+      compareBy<TaskItem> {
+        when (it.status) {
+          TaskStatus.PENDING -> 0
+          TaskStatus.EXCEPTION -> 1
+          TaskStatus.COMPLETED -> 2
+        }
+      }
         .thenBy { com.example.util.DateUtils.parseTimeToMinutes(it.time) }
         .thenBy {
           when (it.priority) {
@@ -304,11 +311,37 @@ class DayFlowRepository(
       if (taskDao != null) {
         val existing = taskDao.getTaskById(taskId)
         if (existing != null) {
-          taskDao.updateTaskCompletion(taskId, !existing.isCompleted)
+          val newStatus = if (existing.status == TaskStatus.COMPLETED) TaskStatus.PENDING else TaskStatus.COMPLETED
+          taskDao.updateTaskStatus(
+            id = taskId,
+            status = newStatus,
+            isCompleted = newStatus == TaskStatus.COMPLETED,
+            exceptionReason = null
+          )
         }
       } else {
         _inMemoryTasks.value = _inMemoryTasks.value.map { task ->
-          if (task.id == taskId) task.copy(isCompleted = !task.isCompleted) else task
+          if (task.id == taskId) {
+            val newStatus = if (task.status == TaskStatus.COMPLETED) TaskStatus.PENDING else TaskStatus.COMPLETED
+            task.copy(status = newStatus, exceptionReason = null)
+          } else task
+        }
+      }
+    }
+  }
+
+  fun setTaskStatus(taskId: String, status: TaskStatus, reason: String? = null) {
+    coroutineScope.launch {
+      if (taskDao != null) {
+        taskDao.updateTaskStatus(
+          id = taskId,
+          status = status,
+          isCompleted = status == TaskStatus.COMPLETED,
+          exceptionReason = reason
+        )
+      } else {
+        _inMemoryTasks.value = _inMemoryTasks.value.map { task ->
+          if (task.id == taskId) task.copy(status = status, exceptionReason = reason) else task
         }
       }
     }
@@ -938,7 +971,8 @@ fun TaskEntity.toTaskItem(): TaskItem {
     time = startTime ?: "09:00 AM",
     endTime = endTime,
     dueDate = dueDate,
-    isCompleted = isCompleted,
+    status = status,
+    exceptionReason = exceptionReason,
     estimatedMinutes = estimatedMinutes
   )
 }
@@ -953,7 +987,9 @@ fun TaskItem.toEntity(): TaskEntity {
     endTime = endTime,
     category = category,
     priority = priority,
+    status = status,
     isCompleted = isCompleted,
+    exceptionReason = exceptionReason,
     estimatedMinutes = estimatedMinutes
   )
 }

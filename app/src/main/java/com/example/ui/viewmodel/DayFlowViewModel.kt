@@ -17,6 +17,7 @@ import com.example.model.StatisticsData
 import com.example.model.StatsTimeRange
 import com.example.model.TaskItem
 import com.example.model.TaskPriority
+import com.example.model.TaskStatus
 import com.example.util.DateUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -215,7 +216,7 @@ class DayFlowViewModel(
       time = if (time.isBlank()) "09:00 AM" else time,
       endTime = endTime,
       dueDate = targetDate,
-      isCompleted = false,
+      status = TaskStatus.PENDING,
       estimatedMinutes = estimatedMinutes
     )
     repository.addTask(newTask)
@@ -226,6 +227,10 @@ class DayFlowViewModel(
   fun updateTask(task: TaskItem) {
     repository.updateTask(task)
     _editingTask.value = null
+  }
+
+  fun setTaskStatus(taskId: String, status: TaskStatus, reason: String? = null) {
+    repository.setTaskStatus(taskId, status, reason)
   }
 
   fun deleteTask(taskId: String) {
