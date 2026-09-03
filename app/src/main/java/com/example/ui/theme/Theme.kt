@@ -13,55 +13,61 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
-fun buildDarkColorScheme(accent: DayFlowAccent): ColorScheme = darkColorScheme(
-  primary = accent.darkPrimary,
-  onPrimary = Color(0xFF1C1A1A),
-  primaryContainer = accent.darkPrimaryContainer,
-  onPrimaryContainer = accent.darkOnPrimaryContainer,
-  secondary = accent.secondary,
-  onSecondary = Color(0xFF16173E),
-  secondaryContainer = accent.secondaryContainer,
-  onSecondaryContainer = accent.secondaryContainer,
-  tertiary = accent.tertiary,
-  onTertiary = Color(0xFF1B1C1C),
-  background = DayFlowDarkThemeColors.background,
-  onBackground = DayFlowDarkThemeColors.onSurface,
-  surface = DayFlowDarkThemeColors.surface,
-  onSurface = DayFlowDarkThemeColors.onSurface,
-  surfaceVariant = DayFlowDarkThemeColors.surfaceVariant,
-  onSurfaceVariant = DayFlowDarkThemeColors.onSurfaceVariant,
-  surfaceContainer = DayFlowDarkThemeColors.surface,
-  surfaceContainerLow = DayFlowDarkThemeColors.surfaceContainerLow,
-  surfaceContainerLowest = DayFlowDarkThemeColors.surfaceContainerLowest,
-  surfaceContainerHigh = DayFlowDarkThemeColors.surfaceContainerHigh,
-  outline = DayFlowDarkThemeColors.outline,
-  outlineVariant = DayFlowDarkThemeColors.outlineVariant
-)
+fun buildDarkColorScheme(accent: DayFlowAccent): ColorScheme {
+  val visual = accent.dark
+  return darkColorScheme(
+    primary = visual.primary,
+    onPrimary = visual.onPrimary,
+    primaryContainer = visual.primaryContainer,
+    onPrimaryContainer = visual.onPrimaryContainer,
+    secondary = visual.secondary,
+    onSecondary = visual.onSecondary,
+    secondaryContainer = visual.secondaryContainer,
+    onSecondaryContainer = visual.onSecondaryContainer,
+    tertiary = visual.tertiary,
+    onTertiary = Color(0xFF1B1C1C),
+    background = DayFlowDarkThemeColors.background,
+    onBackground = DayFlowDarkThemeColors.onSurface,
+    surface = DayFlowDarkThemeColors.surface,
+    onSurface = DayFlowDarkThemeColors.onSurface,
+    surfaceVariant = DayFlowDarkThemeColors.surfaceVariant,
+    onSurfaceVariant = DayFlowDarkThemeColors.onSurfaceVariant,
+    surfaceContainer = DayFlowDarkThemeColors.surface,
+    surfaceContainerLow = DayFlowDarkThemeColors.surfaceContainerLow,
+    surfaceContainerLowest = DayFlowDarkThemeColors.surfaceContainerLowest,
+    surfaceContainerHigh = DayFlowDarkThemeColors.surfaceContainerHigh,
+    outline = DayFlowDarkThemeColors.outline,
+    outlineVariant = DayFlowDarkThemeColors.outlineVariant
+  )
+}
 
-fun buildLightColorScheme(accent: DayFlowAccent): ColorScheme = lightColorScheme(
-  primary = accent.primary,
-  onPrimary = accent.onPrimary,
-  primaryContainer = accent.primaryContainer,
-  onPrimaryContainer = accent.onPrimaryContainer,
-  secondary = accent.secondary,
-  onSecondary = accent.onSecondary,
-  secondaryContainer = accent.secondaryContainer,
-  onSecondaryContainer = accent.onSecondaryContainer,
-  tertiary = accent.tertiary,
-  onTertiary = Color.White,
-  background = DayFlowLightColors.background,
-  onBackground = DayFlowLightColors.onSurface,
-  surface = DayFlowLightColors.surface,
-  onSurface = DayFlowLightColors.onSurface,
-  surfaceVariant = DayFlowLightColors.surfaceVariant,
-  onSurfaceVariant = DayFlowLightColors.onSurfaceVariant,
-  surfaceContainer = DayFlowLightColors.surface,
-  surfaceContainerLow = DayFlowLightColors.surfaceContainerLow,
-  surfaceContainerLowest = DayFlowLightColors.surfaceContainerLowest,
-  surfaceContainerHigh = DayFlowLightColors.surfaceContainerHigh,
-  outline = DayFlowLightColors.outline,
-  outlineVariant = DayFlowLightColors.outlineVariant
-)
+fun buildLightColorScheme(accent: DayFlowAccent): ColorScheme {
+  val visual = accent.light
+  return lightColorScheme(
+    primary = visual.primary,
+    onPrimary = visual.onPrimary,
+    primaryContainer = visual.primaryContainer,
+    onPrimaryContainer = visual.onPrimaryContainer,
+    secondary = visual.secondary,
+    onSecondary = visual.onSecondary,
+    secondaryContainer = visual.secondaryContainer,
+    onSecondaryContainer = visual.onSecondaryContainer,
+    tertiary = visual.tertiary,
+    onTertiary = Color.White,
+    background = DayFlowLightColors.background,
+    onBackground = DayFlowLightColors.onSurface,
+    surface = DayFlowLightColors.surface,
+    onSurface = DayFlowLightColors.onSurface,
+    surfaceVariant = DayFlowLightColors.surfaceVariant,
+    onSurfaceVariant = DayFlowLightColors.onSurfaceVariant,
+    surfaceContainer = DayFlowLightColors.surface,
+    surfaceContainerLow = DayFlowLightColors.surfaceContainerLow,
+    surfaceContainerLowest = DayFlowLightColors.surfaceContainerLowest,
+    surfaceContainerHigh = DayFlowLightColors.surfaceContainerHigh,
+    outline = DayFlowLightColors.outline,
+    outlineVariant = DayFlowLightColors.outlineVariant
+  )
+}
 
 @Composable
 fun DayFlowTheme(

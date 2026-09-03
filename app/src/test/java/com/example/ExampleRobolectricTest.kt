@@ -66,7 +66,7 @@ class ExampleRobolectricTest {
       title = "Architecture Review",
       category = ItemCategory.WORK,
       dueDate = today,
-      isCompleted = true,
+      status = com.example.model.TaskStatus.COMPLETED,
       estimatedMinutes = 60
     )
     val task2 = com.example.model.TaskItem(
@@ -74,7 +74,7 @@ class ExampleRobolectricTest {
       title = "Evening Run",
       category = ItemCategory.FITNESS,
       dueDate = today,
-      isCompleted = false,
+      status = com.example.model.TaskStatus.PENDING,
       estimatedMinutes = 30
     )
 
@@ -95,7 +95,7 @@ class ExampleRobolectricTest {
     // Complete task 2
     val statsUpdated = repository.calculateStatistics(
       com.example.model.StatsTimeRange.DAYS_7,
-      listOf(task1, task2.copy(isCompleted = true)),
+      listOf(task1, task2.copy(status = com.example.model.TaskStatus.COMPLETED)),
       emptyList()
     )
     assertEquals(2, statsUpdated.tasksCompleted)
@@ -107,8 +107,8 @@ class ExampleRobolectricTest {
   fun `dayflow context builder structures data accurately without leaking private keys`() {
     val context = com.example.data.ai.AiCoachContext(
       todayTasks = listOf(
-        com.example.model.TaskItem(id = "1", title = "Write Design Doc", isCompleted = true, estimatedMinutes = 45),
-        com.example.model.TaskItem(id = "2", title = "Review PR", isCompleted = false, estimatedMinutes = 30)
+        com.example.model.TaskItem(id = "1", title = "Write Design Doc", status = com.example.model.TaskStatus.COMPLETED, estimatedMinutes = 45),
+        com.example.model.TaskItem(id = "2", title = "Review PR", status = com.example.model.TaskStatus.PENDING, estimatedMinutes = 30)
       ),
       todayHabits = listOf(
         com.example.model.HabitItem(id = "h1", title = "Hydration", streakDays = 5, dailyTarget = 8, currentProgress = 8, completedToday = true)
@@ -133,7 +133,7 @@ class ExampleRobolectricTest {
   fun `ai service produces mindful fallback coaching in English and Hindi`() {
     val context = com.example.data.ai.AiCoachContext(
       todayTasks = listOf(
-        com.example.model.TaskItem(id = "1", title = "Deep Work Block", isCompleted = false, estimatedMinutes = 60)
+        com.example.model.TaskItem(id = "1", title = "Deep Work Block", status = com.example.model.TaskStatus.PENDING, estimatedMinutes = 60)
       ),
       todayHabits = emptyList(),
       activeGoals = emptyList(),
@@ -219,7 +219,7 @@ class ExampleRobolectricTest {
       title = "Architecture Refactoring",
       priority = com.example.model.TaskPriority.HIGH,
       time = "10:00 AM",
-      isCompleted = false,
+      status = com.example.model.TaskStatus.PENDING,
       estimatedMinutes = 90
     )
 
@@ -238,7 +238,7 @@ class ExampleRobolectricTest {
     assertTrue(pendingOutput.contains("HIGH PRIORITY"))
 
     // User completes task
-    val completedTask = task.copy(isCompleted = true)
+    val completedTask = task.copy(status = com.example.model.TaskStatus.COMPLETED)
     val completedContext = pendingContext.copy(
       todayTasks = listOf(completedTask),
       summary = com.example.model.DailyProgressSummary(1, 1, 0, 0, 90, 0)

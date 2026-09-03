@@ -117,6 +117,7 @@ import com.example.ui.theme.DayFlowSurface
 import com.example.ui.theme.DayFlowSurfaceContainerLow
 import com.example.ui.theme.DayFlowSurfaceVariant
 import com.example.ui.theme.DayFlowTertiary
+import com.example.ui.theme.LocalDayFlowIsDark
 import com.example.util.DateUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -357,10 +358,11 @@ fun SettingsScreen(
 
             SettingsRowDivider()
 
+            val isDark = LocalDayFlowIsDark.current
             SettingsItemRow(
               icon = Icons.Outlined.Palette,
               title = "Accent Color",
-              value = accentColor.displayName,
+              value = accentColor.getDisplayName(isDark),
               onClick = onOpenAccentColor,
               testTag = "settings_item_accent_color"
             )

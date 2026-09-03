@@ -56,6 +56,8 @@ fun AccentColorScreen(
   onSelectAccent: (DayFlowAccent) -> Unit,
   onNavigateBack: () -> Unit
 ) {
+  val isDark = LocalDayFlowIsDark.current
+
   Scaffold(
     containerColor = DayFlowBackground,
     modifier = Modifier
@@ -102,14 +104,14 @@ fun AccentColorScreen(
         Box(modifier = Modifier.size(40.dp))
       }
 
-      // 2. Subtitle Section
+      // 2. Subtitle Section (Theme-Adaptive)
       Column(
         modifier = Modifier
           .fillMaxWidth()
           .padding(horizontal = 24.dp, vertical = 6.dp)
       ) {
         Text(
-          text = "Choose an accent that fits your flow.",
+          text = if (isDark) "10 curated luminous palettes crafted for DayFlow Dark." else "10 curated soft palettes crafted for DayFlow Light.",
           style = MaterialTheme.typography.bodyMedium.copy(
             fontSize = 14.sp,
             lineHeight = 20.sp
@@ -132,6 +134,7 @@ fun AccentColorScreen(
           AccentOptionCard(
             accent = accent,
             isSelected = isSelected,
+            isDark = isDark,
             onClick = { onSelectAccent(accent) }
           )
         }
@@ -148,10 +151,11 @@ fun AccentColorScreen(
 private fun AccentOptionCard(
   accent: DayFlowAccent,
   isSelected: Boolean,
+  isDark: Boolean,
   onClick: () -> Unit
 ) {
-  val isDark = LocalDayFlowIsDark.current
-  val activePrimary = if (isDark) accent.darkPrimary else accent.primary
+  val visual = accent.visual(isDark)
+  val activePrimary = visual.primary
 
   Surface(
     modifier = Modifier
@@ -178,12 +182,12 @@ private fun AccentOptionCard(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.weight(1f)
       ) {
-        // Palette Swatch preview (Primary dot + secondary tone)
-        PaletteSwatchPreview(accent = accent)
+        // Palette Swatch preview (Primary dot + container tone + secondary tone)
+        PaletteSwatchPreview(accent = accent, isDark = isDark)
 
         Column(modifier = Modifier.weight(1f)) {
           Text(
-            text = accent.displayName,
+            text = visual.displayName,
             style = MaterialTheme.typography.titleMedium.copy(
               fontSize = 16.sp,
               fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
@@ -192,7 +196,7 @@ private fun AccentOptionCard(
           )
           Spacer(modifier = Modifier.height(2.dp))
           Text(
-            text = accent.description,
+            text = visual.description,
             style = MaterialTheme.typography.bodySmall.copy(
               fontSize = 12.sp,
               lineHeight = 16.sp
@@ -221,7 +225,7 @@ private fun AccentOptionCard(
           Icon(
             imageVector = Icons.Default.Check,
             contentDescription = "Selected",
-            tint = DayFlowOnPrimary,
+            tint = if (isDark) visual.onPrimary else DayFlowOnPrimary,
             modifier = Modifier.size(15.dp)
           )
         }
@@ -231,10 +235,8 @@ private fun AccentOptionCard(
 }
 
 @Composable
-private fun PaletteSwatchPreview(accent: DayFlowAccent) {
-  val isDark = LocalDayFlowIsDark.current
-  val primaryTone = if (isDark) accent.darkPrimary else accent.primary
-  val containerTone = if (isDark) accent.darkPrimaryContainer else accent.primaryContainer
+private fun PaletteSwatchPreview(accent: DayFlowAccent, isDark: Boolean) {
+  val visual = accent.visual(isDark)
 
   Row(
     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -245,7 +247,7 @@ private fun PaletteSwatchPreview(accent: DayFlowAccent) {
       modifier = Modifier
         .size(22.dp)
         .clip(CircleShape)
-        .background(primaryTone)
+        .background(visual.primary)
     )
 
     // Primary Container Tone
@@ -253,7 +255,7 @@ private fun PaletteSwatchPreview(accent: DayFlowAccent) {
       modifier = Modifier
         .size(16.dp)
         .clip(CircleShape)
-        .background(containerTone)
+        .background(visual.primaryContainer)
     )
 
     // Secondary Accent Tone
@@ -261,7 +263,7 @@ private fun PaletteSwatchPreview(accent: DayFlowAccent) {
       modifier = Modifier
         .size(12.dp)
         .clip(CircleShape)
-        .background(accent.secondary)
+        .background(visual.secondary)
     )
   }
 }
